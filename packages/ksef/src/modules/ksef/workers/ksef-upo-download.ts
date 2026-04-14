@@ -5,6 +5,11 @@ import { resolveKsefStatus } from '../lib/status-codes'
 import { KsefClientService } from '../services/client.service'
 import { emitKsefEvent } from '../events'
 import type { KsefSubmissionEventPayload } from '../events'
+import {
+  ksefLogger as logger,
+  recordKsefSubmission,
+  withKsefSpan,
+} from '../lib/observability'
 
 export const UPO_DOWNLOAD_QUEUE_NAME = 'ksef-upo-download'
 
@@ -24,6 +29,16 @@ export type UpoDownloadPayload = {
 type HandlerContext = { resolve: <T = unknown>(name: string) => T }
 
 export default async function handle(
+  job: QueuedJob<UpoDownloadPayload>,
+  ctx: JobContext & HandlerContext
+): Promise<void> {
+  return withKsefSpan(
+    { op: 'upo_download', environment: null, nip: null },
+    () => handleInner(job, ctx),
+  )
+}
+
+async function handleInner(
   job: QueuedJob<UpoDownloadPayload>,
   ctx: JobContext & HandlerContext
 ): Promise<void> {
@@ -57,6 +72,7 @@ export default async function handle(
 
     const client = new KsefClientService(environment as 'test' | 'demo' | 'production')
     client.setAccessToken(session.sessionToken)
+    client.setNip(session.nip ?? null)
 
     const sessionRef = session.ksefReferenceNumber ?? referenceNumber
     const upoResult = await client.downloadUpo(sessionRef, referenceNumber)
@@ -88,6 +104,7 @@ export default async function handle(
     await em.flush()
 
     for (const submission of submissions) {
+      recordKsefSubmission({ op: 'upo_download', environment, nip: null }, 'upo_downloaded')
       await emitKsefEvent('ksef.submission.upo_downloaded', buildEventPayload(submission))
     }
   } catch (err: unknown) {
@@ -96,6 +113,13 @@ export default async function handle(
     session.errorMessage = errorMessage
     await em.persist(session).flush()
 
+    logger.error('ksef.upo_download.failed', {
+      sessionId,
+      referenceNumber,
+      tenantId,
+      organizationId,
+      error: errorMessage,
+    })
     throw err
   }
 }

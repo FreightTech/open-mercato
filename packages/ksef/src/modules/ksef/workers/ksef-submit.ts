@@ -13,6 +13,12 @@ import type { KsefAuthService } from '../services/auth.service'
 import { KsefXmlService } from '../services/xml.service'
 import { emitKsefEvent } from '../events'
 import type { KsefSubmissionEventPayload } from '../events'
+import {
+  ksefLogger as logger,
+  monitoredKsefFetch,
+  recordKsefSubmission,
+  withKsefSpan,
+} from '../lib/observability'
 
 export const SUBMIT_QUEUE_NAME = 'ksef-submit'
 
@@ -52,6 +58,20 @@ export default async function handle(
     return
   }
 
+  return withKsefSpan(
+    { op: 'submit', environment: null, nip: null },
+    () => handleInner(em, submission, invoiceId, tenantId, organizationId, ctx),
+  )
+}
+
+async function handleInner(
+  em: EntityManager,
+  submission: KsefSubmission,
+  invoiceId: string,
+  tenantId: string,
+  organizationId: string,
+  ctx: JobContext & HandlerContext,
+): Promise<void> {
   try {
     // Load KSeF credentials from Integration Marketplace
     const { createCredentialsService } = await import('@open-mercato/core/modules/integrations/lib/credentials-service')
@@ -103,21 +123,25 @@ export default async function handle(
       throw new Error('KSeF session has no reference number — cannot submit invoice')
     }
     const sendUrl = getSendInvoiceUrl(environment as 'test' | 'demo' | 'production', sessionRef)
-    const sendResponse = await fetch(sendUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+    const sendResponse = await monitoredKsefFetch(
+      sendUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          invoiceHash: prepared.invoiceHash,
+          invoiceSize: prepared.invoiceSize,
+          encryptedInvoiceHash: prepared.encryptedInvoiceHash,
+          encryptedInvoiceSize: prepared.encryptedInvoiceSize,
+          encryptedInvoiceContent: prepared.encryptedInvoiceContent,
+          offlineMode: false,
+        }),
       },
-      body: JSON.stringify({
-        invoiceHash: prepared.invoiceHash,
-        invoiceSize: prepared.invoiceSize,
-        encryptedInvoiceHash: prepared.encryptedInvoiceHash,
-        encryptedInvoiceSize: prepared.encryptedInvoiceSize,
-        encryptedInvoiceContent: prepared.encryptedInvoiceContent,
-        offlineMode: false,
-      }),
-    })
+      { op: 'send_invoice', environment, nip },
+    )
 
     if (!sendResponse.ok) {
       const errorBody = await sendResponse.text()
@@ -125,8 +149,12 @@ export default async function handle(
     }
 
     const sendResult = (await sendResponse.json()) as { referenceNumber: string }
-    console.log('[ksef-submit] Invoice accepted for processing:', sendResult.referenceNumber)
-    console.log('[ksef-submit] Generated XML (first 500 chars):', invoiceXml.substring(0, 500))
+    logger.info('ksef.submit.accepted', {
+      referenceNumber: sendResult.referenceNumber,
+      submissionId: submission.id,
+      tenantId,
+      organizationId,
+    })
 
     // Update submission with result
     submission.status = 'submitted'
@@ -140,6 +168,7 @@ export default async function handle(
 
     await em.persist([submission, session]).flush()
 
+    recordKsefSubmission({ op: 'submit', environment, nip }, 'submitted')
     await emitKsefEvent('ksef.submission.submitted', buildEventPayload(submission))
 
     // Poll for processing result — KSeF processes asynchronously
@@ -147,9 +176,11 @@ export default async function handle(
 
     // Check for failed invoices in this session
     const failedUrl = getSessionFailedInvoicesUrl(environment as 'test' | 'demo' | 'production', sessionRef)
-    const failedResponse = await fetch(failedUrl, {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    })
+    const failedResponse = await monitoredKsefFetch(
+      failedUrl,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } },
+      { op: 'session_failed_invoices', environment, nip },
+    )
     if (failedResponse.ok) {
       const failedResult = (await failedResponse.json()) as { invoices?: Array<{ referenceNumber?: string; exceptionDescription?: string; exceptionCode?: number; details?: string[] }> }
       const failures = failedResult.invoices ?? (Array.isArray(failedResult) ? failedResult : [])
@@ -158,6 +189,7 @@ export default async function handle(
         submission.status = 'rejected'
         submission.errorMessage = `KSeF rejected invoice: ${details}`
         await em.persist(submission).flush()
+        recordKsefSubmission({ op: 'submit', environment, nip }, 'rejected')
         await emitKsefEvent('ksef.submission.error', buildEventPayload(submission))
         return
       }
@@ -169,9 +201,11 @@ export default async function handle(
       sessionRef,
       sendResult.referenceNumber,
     )
-    const statusResponse = await fetch(invoiceStatusUrl, {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    })
+    const statusResponse = await monitoredKsefFetch(
+      invoiceStatusUrl,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } },
+      { op: 'session_invoice_status', environment, nip },
+    )
     if (statusResponse.ok) {
       const statusResult = (await statusResponse.json()) as Record<string, unknown>
 
@@ -181,6 +215,7 @@ export default async function handle(
         submission.errorMessage = `KSeF processing error (code ${processingCode}): ${JSON.stringify(statusResult)}`
         submission.errorCode = String(processingCode)
         await em.persist(submission).flush()
+        recordKsefSubmission({ op: 'submit', environment, nip }, 'rejected')
         await emitKsefEvent('ksef.submission.error', buildEventPayload(submission))
         return
       }
@@ -200,22 +235,30 @@ export default async function handle(
         submission.ksefNumber = ksefNumber
         submission.status = 'accepted'
         submission.acceptedAt = new Date()
+        recordKsefSubmission({ op: 'submit', environment, nip }, 'accepted')
       }
     }
 
     // Close the online session — prevents stale sessions accumulating on KSeF side
     try {
       const closeUrl = getCloseOnlineSessionUrl(environment as 'test' | 'demo' | 'production', sessionRef)
-      await fetch(closeUrl, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-      })
+      await monitoredKsefFetch(
+        closeUrl,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+        },
+        { op: 'close_online_session', environment, nip },
+      )
       session.sessionStatus = 'closed' as any
       session.closedAt = new Date()
       await em.persist(session).flush()
-    } catch {
+    } catch (closeErr) {
       // Non-critical — session will eventually time out on KSeF side
-      console.warn('[ksef-submit] Failed to close KSeF session, it will expire automatically')
+      logger.warn('ksef.submit.session_close_failed', {
+        submissionId: submission.id,
+        error: closeErr instanceof Error ? closeErr.message : 'Unknown error',
+      })
     }
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err)
@@ -224,6 +267,13 @@ export default async function handle(
     submission.errorMessage = errorMessage
     await em.persist(submission).flush()
 
+    recordKsefSubmission({ op: 'submit', environment: null, nip: null }, 'error')
+    logger.error('ksef.submit.failed', {
+      submissionId: submission.id,
+      tenantId,
+      organizationId,
+      error: errorMessage,
+    })
     await emitKsefEvent('ksef.submission.error', buildEventPayload(submission))
 
     throw err

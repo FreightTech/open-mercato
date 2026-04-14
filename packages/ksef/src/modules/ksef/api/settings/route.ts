@@ -4,6 +4,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { z } from 'zod'
+import { ksefLogger as logger } from '../../lib/observability'
 
 const CONFIG_MODULE_ID = 'ksef'
 const CONFIG_NAME = 'receive_sync_settings'
@@ -144,7 +145,9 @@ export async function PUT(request: NextRequest) {
       }
     }
   } catch (err) {
-    console.error('[ksef:settings] Failed to update scheduler:', err)
+    logger.error('ksef.settings.scheduler_update_failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
     // Settings are saved even if scheduler update fails
   }
 

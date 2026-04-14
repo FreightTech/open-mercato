@@ -8,6 +8,11 @@ import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attach
 import type { PipelineOrchestrator } from '../services/pipeline/orchestrator'
 import { ensureTenantScope, ensureOrganizationScope } from './shared'
 import type { DocumentProcessedPayload } from '../events'
+import {
+  documentsLogger as logger,
+  recordDocumentParse,
+  withDocumentParseSpan,
+} from '../lib/observability'
 
 const processDocumentSchema = z.object({
   id: z.string().uuid(),
@@ -38,6 +43,16 @@ const processDocumentCommand: CommandHandler<ProcessDocumentInput, ProcessDocume
     // Get the attachment file
     const attachment = await em.findOne(Attachment, { id: document.attachmentId })
     if (!attachment?.partitionCode || !attachment?.storagePath) {
+      recordDocumentParse(
+        {
+          documentType: document.documentType || 'unknown',
+          category: document.category || 'unknown',
+          tenantId: document.tenantId,
+          organizationId: document.organizationId,
+          source: 'command',
+        },
+        'failure',
+      )
       throw new Error('Attachment file not found')
     }
 
@@ -56,40 +71,74 @@ const processDocumentCommand: CommandHandler<ProcessDocumentInput, ProcessDocume
     document.processingStatus = 'processing'
     await em.flush()
 
-    try {
-      const orchestrator = ctx.container.resolve('fmsPipelineOrchestrator') as PipelineOrchestrator
-      const result = await orchestrator.processDocument(fileBuffer, filename)
+    return withDocumentParseSpan(
+      {
+        documentId: document.id,
+        tenantId: document.tenantId,
+        organizationId: document.organizationId,
+        source: 'command',
+      },
+      async () => {
+        const startTime = Date.now()
+        try {
+          const orchestrator = ctx.container.resolve('fmsPipelineOrchestrator') as PipelineOrchestrator
+          const result = await orchestrator.processDocument(fileBuffer, filename)
 
-      // Store results
-      document.processingStatus = 'completed'
-      document.processingResult = result as unknown as Record<string, unknown>
-      document.consensusConfidence = result.consensus.overallConfidence.toFixed(2)
-      document.consensusRecommendation = result.consensus.recommendation
-      document.documentType = result.documentType
-      document.documentTypeConfidence = result.documentTypeConfidence
-      document.extractedData = result.consensus.consensusData
-      document.processedAt = new Date()
+          // Store results
+          document.processingStatus = 'completed'
+          document.processingResult = result as unknown as Record<string, unknown>
+          document.consensusConfidence = result.consensus.overallConfidence.toFixed(2)
+          document.consensusRecommendation = result.consensus.recommendation
+          document.documentType = result.documentType
+          document.documentTypeConfidence = result.documentTypeConfidence
+          document.extractedData = result.consensus.consensusData
+          document.processedAt = new Date()
 
-      if (result.documentType && result.documentType !== 'unknown') {
-        document.category = result.documentType as DocumentCategory
-      }
-      await em.flush()
+          if (result.documentType && result.documentType !== 'unknown') {
+            document.category = result.documentType as DocumentCategory
+          }
+          await em.flush()
 
-      // Emit document processed event for downstream subscribers
-      await emitDocumentProcessedEvent(ctx, document, result.consensus.consensusData)
+          recordDocumentParse(
+            {
+              documentType: result.documentType || 'unknown',
+              category: document.category || 'unknown',
+              tenantId: document.tenantId,
+              organizationId: document.organizationId,
+              source: 'command',
+            },
+            'success',
+            Date.now() - startTime,
+          )
 
-      return {
-        id: document.id,
-        processingStatus: 'completed',
-        documentType: result.documentType,
-        consensusRecommendation: result.consensus.recommendation,
-        consensusConfidence: result.consensus.overallConfidence,
-      }
-    } catch (error) {
-      document.processingStatus = 'failed'
-      await em.flush()
-      throw error
-    }
+          // Emit document processed event for downstream subscribers
+          await emitDocumentProcessedEvent(ctx, document, result.consensus.consensusData)
+
+          return {
+            id: document.id,
+            processingStatus: 'completed',
+            documentType: result.documentType,
+            consensusRecommendation: result.consensus.recommendation,
+            consensusConfidence: result.consensus.overallConfidence,
+          }
+        } catch (error) {
+          document.processingStatus = 'failed'
+          await em.flush()
+          recordDocumentParse(
+            {
+              documentType: document.documentType || 'unknown',
+              category: document.category || 'unknown',
+              tenantId: document.tenantId,
+              organizationId: document.organizationId,
+              source: 'command',
+            },
+            'failure',
+            Date.now() - startTime,
+          )
+          throw error
+        }
+      },
+    )
   },
 }
 
@@ -136,8 +185,10 @@ async function emitDocumentProcessedEvent(
   try {
     await bus.emitEvent('fms_documents.document.processed', payload, { persistent: true })
   } catch (error) {
-    // Log but don't fail the command
-    console.warn('[fms_documents:process] Failed to emit document processed event:', error)
+    logger.warn('fms.document.processed.event.emit_failed', {
+      documentId: document.id,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
   }
 }
 

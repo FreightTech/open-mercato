@@ -7,7 +7,11 @@ import type { PipelineOrchestrator } from '../services/pipeline/orchestrator'
 import type { PageImageService } from '../services/page-image.service'
 import type { DocumentProcessedPayload } from '../events'
 import { applyExtractionResult, normalizeConsensusData } from '../services/extraction-result-mapper'
-import { createLogger, getMeter } from '@open-mercato/logger'
+import {
+  documentsLogger as logger,
+  recordDocumentParse,
+  withDocumentParseSpan,
+} from '../lib/observability'
 
 export const EXTRACT_QUEUE_NAME = 'fms-document-extract'
 
@@ -25,19 +29,6 @@ export type ExtractPayload = {
   organizationId: string
 }
 
-const logger = createLogger('fms_documents')
-const meter = getMeter('fms_documents')
-
-const extractionCounter = meter.createCounter('fms.documents.extracted', {
-  description: 'Number of documents extracted via worker',
-  unit: '1',
-})
-
-const extractionDurationHistogram = meter.createHistogram('fms.documents.extraction.duration', {
-  description: 'Document extraction duration in milliseconds',
-  unit: 'ms',
-})
-
 type HandlerContext = { resolve: <T = unknown>(name: string) => T }
 
 export default async function handle(
@@ -45,6 +36,18 @@ export default async function handle(
   ctx: JobContext & HandlerContext,
 ): Promise<void> {
   const em = ctx.resolve<EntityManager>('em').fork()
+  const { documentId, tenantId, organizationId } = job.payload
+  return withDocumentParseSpan(
+    { documentId, tenantId, organizationId, source: 'worker' },
+    () => handleInner(em, job, ctx),
+  )
+}
+
+async function handleInner(
+  em: EntityManager,
+  job: QueuedJob<ExtractPayload>,
+  ctx: JobContext & HandlerContext,
+): Promise<void> {
   const { documentId, tenantId, organizationId } = job.payload
 
   logger.info('fms.document.extraction.worker.started', { documentId, tenantId, organizationId })
@@ -58,12 +61,26 @@ export default async function handle(
 
   if (!document) {
     logger.warn('fms.document.extraction.worker.not_found', { documentId })
+    recordDocumentParse(
+      { documentType: 'unknown', category: 'unknown', tenantId, organizationId, source: 'worker' },
+      'skipped',
+    )
     return
   }
 
   // Idempotency: skip if already completed
   if (document.processingStatus === 'completed') {
     logger.info('fms.document.extraction.worker.already_completed', { documentId })
+    recordDocumentParse(
+      {
+        documentType: document.documentType || 'unknown',
+        category: document.category || 'unknown',
+        tenantId,
+        organizationId,
+        source: 'worker',
+      },
+      'skipped',
+    )
     return
   }
 
@@ -73,6 +90,16 @@ export default async function handle(
     document.lastError = `Max retries (${MAX_RETRIES}) exceeded`
     await em.flush()
     logger.warn('fms.document.extraction.worker.max_retries', { documentId, retryCount: document.retryCount })
+    recordDocumentParse(
+      {
+        documentType: document.documentType || 'unknown',
+        category: document.category || 'unknown',
+        tenantId,
+        organizationId,
+        source: 'worker',
+      },
+      'failure',
+    )
     return
   }
 
@@ -122,20 +149,17 @@ export default async function handle(
       organizationId,
     })
 
-    extractionCounter.add(1, {
-      category: document.category || 'unknown',
-      documentType: document.documentType || 'unknown',
-      status: 'success',
-      tenantId,
-      organizationId,
-    })
-
-    extractionDurationHistogram.record(durationMs, {
-      category: document.category || 'unknown',
-      documentType: document.documentType || 'unknown',
-      tenantId,
-      organizationId,
-    })
+    recordDocumentParse(
+      {
+        documentType: document.documentType || 'unknown',
+        category: document.category || 'unknown',
+        tenantId,
+        organizationId,
+        source: 'worker',
+      },
+      'success',
+      durationMs,
+    )
 
     // Extract PDF page images if none exist yet
     const isPdf = attachment.mimeType === 'application/pdf' ||
@@ -224,13 +248,17 @@ export default async function handle(
       organizationId,
     })
 
-    extractionCounter.add(1, {
-      category: document.category || 'unknown',
-      documentType: 'unknown',
-      status: 'failure',
-      tenantId,
-      organizationId,
-    })
+    recordDocumentParse(
+      {
+        documentType: document.documentType || 'unknown',
+        category: document.category || 'unknown',
+        tenantId,
+        organizationId,
+        source: 'worker',
+      },
+      'failure',
+      durationMs,
+    )
 
     // Re-throw so the queue system can retry
     throw error

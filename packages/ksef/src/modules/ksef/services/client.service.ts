@@ -16,6 +16,11 @@ import type {
   KsefDownloadInvoiceResponse,
   KsefErrorResponse,
 } from '../lib/types'
+import {
+  recordKsefRequest,
+  recordKsefRateLimit,
+  recordKsefSessionExpired,
+} from '../lib/observability'
 
 export class KsefApiError extends Error {
   readonly statusCode: number
@@ -49,6 +54,7 @@ export class KsefApiError extends Error {
 export class KsefClientService {
   private environment: KsefEnvironment
   private accessToken: string | null = null
+  private nip: string | null = null
 
   constructor(environment: KsefEnvironment) {
     this.environment = environment
@@ -62,6 +68,10 @@ export class KsefClientService {
     this.accessToken = token
   }
 
+  setNip(nip: string | null): void {
+    this.nip = nip
+  }
+
   clearAccessToken(): void {
     this.accessToken = null
   }
@@ -73,31 +83,31 @@ export class KsefClientService {
   async sendInvoice(sessionReferenceNumber: string, request: KsefSendInvoiceRequest): Promise<KsefSendInvoiceResponse> {
     this.assertAccessToken()
     const url = getSendInvoiceUrl(this.environment, sessionReferenceNumber)
-    return this.request<KsefSendInvoiceResponse>('POST', url, request)
+    return this.request<KsefSendInvoiceResponse>('POST', url, 'send_invoice', request)
   }
 
   async getInvoiceStatus(sessionReferenceNumber: string, invoiceReferenceNumber: string): Promise<KsefInvoiceStatusResponse> {
     this.assertAccessToken()
     const url = getInvoiceStatusUrl(this.environment, sessionReferenceNumber, invoiceReferenceNumber)
-    return this.request<KsefInvoiceStatusResponse>('GET', url)
+    return this.request<KsefInvoiceStatusResponse>('GET', url, 'get_invoice_status')
   }
 
   async downloadUpo(sessionReferenceNumber: string, ksefNumber: string): Promise<KsefUpoResponse> {
     this.assertAccessToken()
     const url = getUpoUrl(this.environment, sessionReferenceNumber, ksefNumber)
-    return this.request<KsefUpoResponse>('GET', url)
+    return this.request<KsefUpoResponse>('GET', url, 'download_upo')
   }
 
   async queryInvoices(request: KsefQueryInvoicesRequest): Promise<KsefQueryInvoicesResponse> {
     this.assertAccessToken()
     const url = getQueryInvoicesUrl(this.environment)
-    return this.request<KsefQueryInvoicesResponse>('POST', url, request)
+    return this.request<KsefQueryInvoicesResponse>('POST', url, 'query_invoices', request)
   }
 
   async downloadInvoice(sessionReferenceNumber: string, invoiceReferenceNumber: string): Promise<KsefDownloadInvoiceResponse> {
     this.assertAccessToken()
     const url = getInvoiceUrl(this.environment, sessionReferenceNumber, invoiceReferenceNumber)
-    return this.request<KsefDownloadInvoiceResponse>('GET', url)
+    return this.request<KsefDownloadInvoiceResponse>('GET', url, 'download_invoice')
   }
 
   private assertAccessToken(): void {
@@ -115,7 +125,7 @@ export class KsefClientService {
   /** Hard ceiling on how long we'll honour `Retry-After` before giving up. */
   private static readonly MAX_RETRY_WAIT_MS = 60_000
 
-  private async request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, url: string, op: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -134,17 +144,22 @@ export class KsefClientService {
       fetchOptions.body = JSON.stringify(body)
     }
 
+    const bindings = { op, environment: this.environment, nip: this.nip }
+    const requestStart = Date.now()
+
     for (let attempt = 0; ; attempt++) {
       let response: Response
       try {
         response = await fetch(url, fetchOptions)
       } catch (err) {
+        recordKsefRequest(bindings, 'error', 0, Date.now() - requestStart)
         throw new Error(
           `KSeF API network error (${method} ${url}): ${err instanceof Error ? err.message : 'Connection failed'}`,
         )
       }
 
       if (response.status === 429 && attempt < KsefClientService.MAX_429_RETRIES) {
+        recordKsefRateLimit(bindings, attempt)
         const waitMs = parseRetryAfterMs(response.headers.get('retry-after'))
           ?? jitteredBackoffMs(attempt)
         const capped = Math.min(waitMs, KsefClientService.MAX_RETRY_WAIT_MS)
@@ -154,10 +169,23 @@ export class KsefClientService {
         continue
       }
 
+      const durationMs = Date.now() - requestStart
+
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          recordKsefSessionExpired(bindings, response.status)
+        }
+        recordKsefRequest(
+          bindings,
+          response.status === 429 ? 'rate_limited' : 'error',
+          response.status,
+          durationMs,
+        )
         const errorText = await response.text()
         throw new KsefApiError(response.status, errorText)
       }
+
+      recordKsefRequest(bindings, 'success', response.status, durationMs)
 
       const responseText = await response.text()
       if (!responseText || responseText.trim().length === 0) {

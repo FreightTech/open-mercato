@@ -6,6 +6,12 @@ import { resolveKsefStatus, getProcessingDescription } from '../lib/status-codes
 import type { KsefInvoiceStatusResponse } from '../lib/types'
 import { emitKsefEvent } from '../events'
 import type { KsefSubmissionEventPayload } from '../events'
+import {
+  ksefLogger as logger,
+  monitoredKsefFetch,
+  recordKsefPollAttempt,
+  withKsefSpan,
+} from '../lib/observability'
 
 export const STATUS_POLL_QUEUE_NAME = 'ksef-status-poll'
 
@@ -31,6 +37,16 @@ const MAX_DELAY_MS = 300000
 type HandlerContext = { resolve: <T = unknown>(name: string) => T }
 
 export default async function handle(
+  job: QueuedJob<StatusPollPayload>,
+  ctx: JobContext & HandlerContext
+): Promise<void> {
+  return withKsefSpan(
+    { op: 'poll_status', environment: null, nip: null },
+    () => handleInner(job, ctx),
+  )
+}
+
+async function handleInner(
   job: QueuedJob<StatusPollPayload>,
   ctx: JobContext & HandlerContext
 ): Promise<void> {
@@ -85,13 +101,17 @@ export default async function handle(
     }
 
     const statusUrl = getInvoiceStatusUrl(environment as 'test' | 'demo' | 'production', sessionRef, referenceNumber)
-    const statusResponse = await fetch(statusUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+    const statusResponse = await monitoredKsefFetch(
+      statusUrl,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
       },
-    })
+      { op: 'poll_status', environment, nip: null },
+    )
 
     if (!statusResponse.ok) {
       const errorBody = await statusResponse.text()
@@ -113,6 +133,7 @@ export default async function handle(
 
       await em.persist(submission).flush()
 
+      recordKsefPollAttempt({ op: 'poll_status', environment, nip: null }, 'accepted')
       await emitKsefEvent('ksef.submission.accepted', buildEventPayload(submission))
       return
     }
@@ -124,6 +145,7 @@ export default async function handle(
 
       await em.persist(submission).flush()
 
+      recordKsefPollAttempt({ op: 'poll_status', environment, nip: null }, 'rejected')
       await emitKsefEvent('ksef.submission.rejected', buildEventPayload(submission))
       return
     }
@@ -135,10 +157,12 @@ export default async function handle(
 
       await em.persist(submission).flush()
 
+      recordKsefPollAttempt({ op: 'poll_status', environment, nip: null }, 'error')
       await emitKsefEvent('ksef.submission.error', buildEventPayload(submission))
       return
     }
 
+    recordKsefPollAttempt({ op: 'poll_status', environment, nip: null }, 'pending')
     // Still processing - re-enqueue with exponential backoff
     const delayMs = Math.min(BASE_DELAY_MS * Math.pow(2, attempt - 1), MAX_DELAY_MS)
     await new Promise((resolve) => setTimeout(resolve, delayMs))
@@ -176,6 +200,14 @@ export default async function handle(
     submission.errorMessage = errorMessage
     await em.persist(submission).flush()
 
+    recordKsefPollAttempt({ op: 'poll_status', environment: null, nip: null }, 'timeout')
+    logger.error('ksef.poll_status.failed', {
+      submissionId,
+      tenantId,
+      organizationId,
+      attempt,
+      error: errorMessage,
+    })
     await emitKsefEvent('ksef.submission.error', buildEventPayload(submission))
 
     throw err

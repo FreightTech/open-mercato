@@ -25,6 +25,11 @@ import { loadPipelineConfig } from './types'
 import { MistralExtractionProvider } from './providers/mistral.provider'
 import { ClaudeExtractionProvider } from './providers/claude.provider'
 import { GeminiExtractionProvider } from './providers/gemini.provider'
+import {
+  recordOcrDuration,
+  recordDetectionDuration,
+  recordConsensusDuration,
+} from '../../lib/observability'
 
 export class PipelineOrchestrator {
   private providers: ExtractionProvider[] = []
@@ -139,22 +144,37 @@ export class PipelineOrchestrator {
     const startTime = Date.now()
 
     // Step 1: OCR — extract raw text using Mistral OCR
-    const { text: rawText } = await withTimeout(
-      this.mistralOcrService.extractText(fileBuffer, filename),
-      this.config.ocrTimeoutMs,
-      'OCR',
-    )
+    const ocrStart = Date.now()
+    let rawText: string
+    try {
+      const ocrResult = await withTimeout(
+        this.mistralOcrService.extractText(fileBuffer, filename),
+        this.config.ocrTimeoutMs,
+        'OCR',
+      )
+      rawText = ocrResult.text
+    } finally {
+      recordOcrDuration('unknown', Date.now() - ocrStart)
+    }
 
     if (!rawText || rawText.trim().length === 0) {
       return this.emptyResult(startTime)
     }
 
     // Step 2: Classify document type
-    const detection = await withTimeout(
-      this.documentDetector.detect(rawText),
-      this.config.detectionTimeoutMs,
-      'Detection',
-    )
+    const detectionStart = Date.now()
+    let detection: Awaited<ReturnType<DocumentDetector['detect']>>
+    let detectedType = 'unknown'
+    try {
+      detection = await withTimeout(
+        this.documentDetector.detect(rawText),
+        this.config.detectionTimeoutMs,
+        'Detection',
+      )
+      detectedType = detection.documentType
+    } finally {
+      recordDetectionDuration(detectedType, Date.now() - detectionStart)
+    }
     const documentType: DocumentType = detection.documentType
     const documentTypeConfidence = detection.confidence
 
@@ -218,7 +238,13 @@ export class PipelineOrchestrator {
     }
 
     // Step 6: Consensus
-    const consensus = this.consensusEngine.buildConsensus(providerResults)
+    const consensusStart = Date.now()
+    let consensus: ReturnType<typeof this.consensusEngine.buildConsensus>
+    try {
+      consensus = this.consensusEngine.buildConsensus(providerResults)
+    } finally {
+      recordConsensusDuration(documentType, Date.now() - consensusStart)
+    }
 
     // Merge transportation metadata from consensus data
     const mergedTransportation = this.mergeTransportation(

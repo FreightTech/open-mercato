@@ -1,5 +1,6 @@
 import type { SubscriberContext } from '@open-mercato/events'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { ksefLogger as logger } from '../lib/observability'
 
 export const metadata = {
   event: 'integrations.credentials.updated',
@@ -55,8 +56,10 @@ export default async function handle(
 
     await saveCompanyProfile(em, profile, { tenantId, organizationId })
 
-    console.log(`[ksef] Company profile fetched for NIP ${nip}: ${profile.name}`)
+    logger.info('ksef.company_profile.fetched', { nip, name: profile.name })
   } catch (error) {
-    console.error('[ksef] Failed to fetch company data from White List:', error)
+    logger.error('ksef.company_profile.fetch_failed', {
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 }

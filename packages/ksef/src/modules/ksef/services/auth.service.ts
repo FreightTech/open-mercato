@@ -25,6 +25,17 @@ import type {
 import { formatNipForKsef } from '../lib/validators'
 import { encryptTokenForKsef } from '../lib/crypto'
 import { X509Certificate } from 'crypto'
+import { monitoredKsefFetch, withKsefSpan } from '../lib/observability'
+
+async function monitoredFetch(
+  url: string,
+  init: RequestInit,
+  op: string,
+  environment: KsefEnvironment,
+  nip: string | null,
+): Promise<Response> {
+  return monitoredKsefFetch(url, init, { op, environment, nip })
+}
 
 interface AuthenticateParams {
   tenantId: string
@@ -62,6 +73,13 @@ export class KsefAuthService {
   }
 
   async authenticate(em: EntityManager, params: AuthenticateParams): Promise<AuthenticateResult> {
+    return withKsefSpan(
+      { op: 'authenticate', environment: params.environment, nip: params.nip },
+      () => this.authenticateInner(em, params),
+    )
+  }
+
+  private async authenticateInner(em: EntityManager, params: AuthenticateParams): Promise<AuthenticateResult> {
     const formattedNip = formatNipForKsef(params.nip)
     const { environment, tenantId, organizationId, credentials } = params
 
@@ -149,38 +167,60 @@ export class KsefAuthService {
     sessionId: string,
     environment: KsefEnvironment
   ): Promise<string> {
-    const session = await em.findOne(KsefSession, { id: sessionId })
-    if (!session || session.sessionStatus !== 'active') {
-      throw new CrudHttpError(400, { error: 'No active session to refresh' })
-    }
+    return withKsefSpan(
+      { op: 'refresh_token', environment, nip: null },
+      async () => {
+        const session = await em.findOne(KsefSession, { id: sessionId })
+        if (!session || session.sessionStatus !== 'active') {
+          throw new CrudHttpError(400, { error: 'No active session to refresh' })
+        }
 
-    const refreshToken = session.refreshToken
-    if (!refreshToken) {
-      throw new CrudHttpError(400, { error: 'Session has no refresh token' })
-    }
+        const refreshToken = session.refreshToken
+        if (!refreshToken) {
+          throw new CrudHttpError(400, { error: 'Session has no refresh token' })
+        }
 
-    const url = getAuthTokenRefreshUrl(environment)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${refreshToken}`,
+        const url = getAuthTokenRefreshUrl(environment)
+        const response = await monitoredFetch(
+          url,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${refreshToken}`,
+            },
+          },
+          'refresh_token',
+          environment,
+          session.nip ?? null,
+        )
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new CrudHttpError(502, { error: `Token refresh failed: ${errorText}` })
+        }
+
+        const result = (await response.json()) as KsefTokenRefreshResponse
+        session.sessionToken = result.accessToken.token
+        await em.flush()
+
+        return result.accessToken.token
       },
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new CrudHttpError(502, { error: `Token refresh failed: ${errorText}` })
-    }
-
-    const result = (await response.json()) as KsefTokenRefreshResponse
-    session.sessionToken = result.accessToken.token
-    await em.flush()
-
-    return result.accessToken.token
+    )
   }
 
   async invalidateSession(
+    em: EntityManager,
+    sessionId: string,
+    environment: KsefEnvironment
+  ): Promise<void> {
+    return withKsefSpan(
+      { op: 'invalidate_session', environment, nip: null },
+      () => this.invalidateSessionInner(em, sessionId, environment),
+    )
+  }
+
+  private async invalidateSessionInner(
     em: EntityManager,
     sessionId: string,
     environment: KsefEnvironment
@@ -203,10 +243,16 @@ export class KsefAuthService {
 
     try {
       const url = getInvalidateCurrentSessionUrl(environment)
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${session.sessionToken}` },
-      })
+      const response = await monitoredFetch(
+        url,
+        {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${session.sessionToken}` },
+        },
+        'invalidate_session',
+        environment,
+        session.nip ?? null,
+      )
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -228,10 +274,13 @@ export class KsefAuthService {
 
   private async requestChallenge(environment: KsefEnvironment): Promise<KsefAuthChallengeResponse> {
     const url = getAuthChallengeUrl(environment)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    })
+    const response = await monitoredFetch(
+      url,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      'auth_challenge',
+      environment,
+      null,
+    )
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -250,7 +299,7 @@ export class KsefAuthService {
     // Strip any whitespace from token (common paste artifact)
     ksefToken = ksefToken.replace(/\s+/g, '')
     const publicKeyUrl = getPublicKeyCertificatesUrl(environment)
-    const pkResponse = await fetch(publicKeyUrl)
+    const pkResponse = await monitoredFetch(publicKeyUrl, {}, 'fetch_public_keys', environment, null)
     if (!pkResponse.ok) {
       throw new Error(`Failed to fetch KSeF public key: ${pkResponse.status}`)
     }
@@ -272,15 +321,21 @@ export class KsefAuthService {
     const encryptedToken = encryptTokenForKsef(ksefToken, timestampMs, publicKeyPem)
 
     const url = getAuthKsefTokenUrl(environment)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        challenge: challenge.challenge,
-        contextIdentifier: { value: nip, type: 'nip' },
-        encryptedToken,
-      }),
-    })
+    const response = await monitoredFetch(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          challenge: challenge.challenge,
+          contextIdentifier: { value: nip, type: 'nip' },
+          encryptedToken,
+        }),
+      },
+      'submit_token_auth',
+      environment,
+      nip,
+    )
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -326,9 +381,13 @@ export class KsefAuthService {
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const url = getAuthStatusUrl(environment, referenceNumber)
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${authenticationToken}` },
-      })
+      const response = await monitoredFetch(
+        url,
+        { headers: { 'Authorization': `Bearer ${authenticationToken}` } },
+        'poll_auth_status',
+        environment,
+        null,
+      )
 
       if (!response.ok) {
         throw new Error(`Auth status check failed (${response.status})`)
@@ -359,13 +418,19 @@ export class KsefAuthService {
     authenticationToken: string
   ): Promise<KsefTokenRedeemResponse> {
     const url = getAuthTokenRedeemUrl(environment)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authenticationToken}`,
+    const response = await monitoredFetch(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authenticationToken}`,
+        },
       },
-    })
+      'redeem_tokens',
+      environment,
+      null,
+    )
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -384,7 +449,7 @@ export class KsefAuthService {
 
     // Fetch KSeF public key to encrypt the symmetric key
     const publicKeyUrl = getPublicKeyCertificatesUrl(environment)
-    const pkResponse = await fetch(publicKeyUrl)
+    const pkResponse = await monitoredFetch(publicKeyUrl, {}, 'fetch_public_keys', environment, null)
     if (!pkResponse.ok) {
       throw new Error(`Failed to fetch KSeF public key: ${pkResponse.status}`)
     }
@@ -408,7 +473,9 @@ export class KsefAuthService {
     const encryptedSymmetricKey = wrapKeyRsaOaep(key, publicKeyPem)
 
     const url = getOpenOnlineSessionUrl(environment)
-    const response = await fetch(url, {
+    const response = await monitoredFetch(
+      url,
+      {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -425,7 +492,11 @@ export class KsefAuthService {
           initializationVector: iv.toString('base64'),
         },
       }),
-    })
+      },
+      'open_online_session',
+      environment,
+      null,
+    )
 
     if (!response.ok) {
       const errorText = await response.text()
