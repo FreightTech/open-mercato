@@ -58,7 +58,8 @@ ENV NODE_ENV=development \
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++ ca-certificates openssl
+RUN apk add --no-cache python3 make g++ ca-certificates openssl \
+    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev
 RUN corepack enable
 
 COPY package.json yarn.lock .yarnrc.yml turbo.json ./
@@ -93,7 +94,9 @@ WORKDIR /app
 
 # Install only production system dependencies (Alpine uses apk)
 # sudo: allows non-root user to chown the Railway-mounted volume at startup
-RUN apk add --no-cache ca-certificates openssl sudo
+# canvas runtime: cairo, pango, jpeg, giflib, librsvg, pixman (needed to load canvas.node)
+RUN apk add --no-cache ca-certificates openssl sudo \
+    cairo pango jpeg giflib librsvg pixman
 
 # Enable Corepack for Yarn
 RUN corepack enable
