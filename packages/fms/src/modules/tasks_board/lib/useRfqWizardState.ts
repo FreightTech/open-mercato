@@ -947,6 +947,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     const validUntil = new Date()
     validUntil.setDate(validUntil.getDate() + 30)
 
+    // Flush pending changes for the current offer before creating a new one
+    await flushPendingSync()
+
     if (!groupIdRef.current) {
       groupIdRef.current = crypto.randomUUID()
     }
@@ -985,11 +988,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     const calcIds = newOffer.calculations?.map((c) => c.id) || []
     setCalculationIds(calcIds)
     calculationIdsRef.current = calcIds
-    // Clear charge rows for new offer
+    // Clear per-offer tracking state and charge rows for new offer
+    chargeSync.clearSyncState()
     setCalculations(editableItemsRef.current.map(() => ({ chargeRows: [] })))
     // Invalidate queries to pick up the new offer
     queryClient.invalidateQueries({ queryKey: ['rfq-detail', currentRfqId] })
-  }, [queryClient])
+  }, [queryClient, flushPendingSync, chargeSync])
 
   // Delete an offer tab (not the first one)
   const deleteOfferTab = useCallback(async (tabIndex: number) => {
@@ -1020,6 +1024,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       const newActive = Math.max(0, currentActive - 1)
       setActiveOfferTabIndex(newActive)
       activeOfferTabIndexRef.current = newActive
+      chargeSync.clearSyncState()
       // Load that tab's data
       const activeTab = newTabs[newActive]
       if (activeTab) {
@@ -1028,11 +1033,11 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         setOfferNumber(activeTab.offerNumber)
         const res = await apiCall<OfferFullData>(`/api/fms_offers/offers/${activeTab.offerId}`)
         if (res.ok && res.result) {
-          const calcs = res.result.calculations || []
+          const calcs = (res.result.calculations || []).filter((c: any) => !(c as any).deletedAt)
           setCalculationIds(calcs.map((c) => c.id))
           calculationIdsRef.current = calcs.map((c) => c.id)
           setCalculations(calcs.map((c) => ({
-            chargeRows: c.lines.map((line) => {
+            chargeRows: c.lines.filter((l: any) => !(l as any).deletedAt).map((line) => {
               const row = offerLineToChargeRow(line)
               if ((c as any).sectionType && !row.sectionType) row.sectionType = (c as any).sectionType
               return row
@@ -1059,6 +1064,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     // Flush pending changes for current offer
     await flushPendingSync()
 
+    // Clear per-offer tracking state so it doesn't leak to the new tab
+    chargeSync.clearSyncState()
+
     setActiveOfferTabIndex(tabIndex)
     activeOfferTabIndexRef.current = tabIndex
     setOfferId(tab.offerId)
@@ -1069,15 +1077,20 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     const res = await apiCall<OfferFullData>(`/api/fms_offers/offers/${tab.offerId}`)
     if (!res.ok || !res.result) return
     const offer = res.result
-    const calcs = offer.calculations || []
+
+    // Restore offer-level fields
+    if (offer.specialTerms != null) setSpecialTerms(offer.specialTerms)
+
+    // Filter out soft-deleted calculations and lines
+    const calcs = (offer.calculations || []).filter((c: any) => !(c as any).deletedAt)
     const calcIds = calcs.map((c) => c.id)
     setCalculationIds(calcIds)
     calculationIdsRef.current = calcIds
 
     // Load charge rows from the selected offer
     const newCalculations = calcs.map((c) => ({
-      chargeRows: c.lines.length > 0
-        ? c.lines.map((line) => {
+      chargeRows: c.lines.filter((line: any) => !(line as any).deletedAt).length > 0
+        ? c.lines.filter((line: any) => !(line as any).deletedAt).map((line) => {
             const row = offerLineToChargeRow(line)
             if ((c as any).sectionType && !row.sectionType) row.sectionType = (c as any).sectionType
             return row
@@ -1089,7 +1102,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       newCalculations.push({ chargeRows: [] })
     }
     setCalculations(newCalculations)
-  }, [flushPendingSync])
+  }, [flushPendingSync, chargeSync])
 
   const reset = useCallback(() => {
     setStep(0)
