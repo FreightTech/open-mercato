@@ -175,15 +175,19 @@ export class KsefReceiverService {
     if (invoiceXml) {
       const parsedLines = extractLineItemsFromFa3(invoiceXml)
       for (const line of parsedLines) {
+        const netAmount = parseFloat(line.netAmount ?? '0')
+        const vatRate = line.vatRate ?? '0'
+        const vatAmount = isNaN(parseFloat(vatRate)) ? 0 : netAmount * (parseFloat(vatRate) / 100)
+
         const lineItem = em.create(KsefInvoiceLineItem, {
           invoice: ksefInvoice,
           lineNumber: parseInt(line.lineNumber ?? '0', 10),
           description: line.description ?? '',
           quantity: line.quantity ?? '1',
           unitPriceNet: line.unitPrice ?? '0',
-          netAmount: line.netAmount ?? '0',
-          vatAmount: '0',
-          vatRate: line.vatRate ?? '0',
+          netAmount: String(netAmount),
+          vatAmount: String(Math.round(vatAmount * 100) / 100),
+          vatRate,
         })
         em.persist(lineItem)
       }

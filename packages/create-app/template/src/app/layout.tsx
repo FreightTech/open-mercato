@@ -36,6 +36,7 @@ export default async function RootLayout({
   const locale = await detectLocale()
   const dict = await loadDictionary(locale)
   const demoModeEnabled = process.env.DEMO_MODE !== 'false'
+  const noticeBarsEnabled = process.env.OM_INTEGRATION_TEST !== 'true'
 
   // Get brand config from domain detection (set by proxy middleware)
   const headerStore = await headers()
@@ -63,7 +64,7 @@ export default async function RootLayout({
         />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning data-gramm="false">
-        <AppProviders locale={locale} dict={dict} demoModeEnabled={demoModeEnabled} brandTheme={brandConfig?.theme}>
+        <AppProviders locale={locale} dict={dict} demoModeEnabled={demoModeEnabled} noticeBarsEnabled={noticeBarsEnabled} brandTheme={brandConfig?.theme}>
           {children}
         </AppProviders>
       </body>
