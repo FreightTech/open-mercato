@@ -1,48 +1,59 @@
+/**
+ * Strip namespace prefixes from XML tags so that `<tns:Fa>` becomes `<Fa>`.
+ * This lets the simple indexOf-based parser handle any namespace prefix
+ * that KSeF invoices may carry (e.g. `tns:`, `ns0:`).
+ */
+function stripNsPrefixes(xml: string): string {
+  return xml.replace(/<(\/?)\w+:/g, '<$1')
+}
+
 function getTagContent(xml: string, tagName: string): string | null {
+  const normalized = stripNsPrefixes(xml)
   const openTag = `<${tagName}`
   const closeTag = `</${tagName}>`
 
-  const startIdx = xml.indexOf(openTag)
+  const startIdx = normalized.indexOf(openTag)
   if (startIdx === -1) {
     return null
   }
 
-  const contentStart = xml.indexOf('>', startIdx) + 1
+  const contentStart = normalized.indexOf('>', startIdx) + 1
   if (contentStart === 0) {
     return null
   }
 
-  const endIdx = xml.indexOf(closeTag, contentStart)
+  const endIdx = normalized.indexOf(closeTag, contentStart)
   if (endIdx === -1) {
     return null
   }
 
-  return xml.substring(contentStart, endIdx).trim()
+  return normalized.substring(contentStart, endIdx).trim()
 }
 
 function getAllTagContents(xml: string, tagName: string): string[] {
+  const normalized = stripNsPrefixes(xml)
   const results: string[] = []
   const openTag = `<${tagName}`
   const closeTag = `</${tagName}>`
 
   let searchStart = 0
-  while (searchStart < xml.length) {
-    const startIdx = xml.indexOf(openTag, searchStart)
+  while (searchStart < normalized.length) {
+    const startIdx = normalized.indexOf(openTag, searchStart)
     if (startIdx === -1) {
       break
     }
 
-    const contentStart = xml.indexOf('>', startIdx) + 1
+    const contentStart = normalized.indexOf('>', startIdx) + 1
     if (contentStart === 0) {
       break
     }
 
-    const endIdx = xml.indexOf(closeTag, contentStart)
+    const endIdx = normalized.indexOf(closeTag, contentStart)
     if (endIdx === -1) {
       break
     }
 
-    results.push(xml.substring(contentStart, endIdx).trim())
+    results.push(normalized.substring(contentStart, endIdx).trim())
     searchStart = endIdx + closeTag.length
   }
 

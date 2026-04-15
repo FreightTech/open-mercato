@@ -122,8 +122,9 @@ export class KsefClientService {
    */
   private static readonly MAX_429_RETRIES = 4
 
-  /** Hard ceiling on how long we'll honour `Retry-After` before giving up. */
-  private static readonly MAX_RETRY_WAIT_MS = 60_000
+  /** Hard ceiling on how long we'll honour `Retry-After` before giving up.
+   *  KSeF enforces 20 req/hour and can ask for ~6 min waits. */
+  private static readonly MAX_RETRY_WAIT_MS = 6 * 60_000
 
   private async request<T>(method: string, url: string, op: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {

@@ -5,6 +5,7 @@ import { KsefSubmission, KsefInvoice, KsefInvoiceLineItem } from '../data/entiti
 import type { KsefEnvironment } from '../data/types'
 import { KsefClientService, KsefApiError } from './client.service'
 import { getInvoiceByKsefNumberUrl } from '../lib/endpoints'
+import { ksefFetchWithRetry } from '../lib/rate-limit'
 import type { KsefInvoiceHeader, KsefQueryCriteria, KsefDownloadInvoiceResponse } from '../lib/types'
 import {
   extractInvoiceNumberFromFa3,
@@ -138,7 +139,7 @@ export class KsefReceiverService {
     let invoiceXml: string | null = null
     try {
       const downloadUrl = getInvoiceByKsefNumberUrl(params.environment, header.ksefReferenceNumber)
-      const downloadResponse = await fetch(downloadUrl, {
+      const downloadResponse = await ksefFetchWithRetry(downloadUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${params.sessionToken}`,

@@ -82,6 +82,12 @@ function getDefaultDateTo(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+function formatDateDMY(date: Date): string {
+  const d = date.getDate().toString().padStart(2, '0')
+  const m = (date.getMonth() + 1).toString().padStart(2, '0')
+  return `${d}/${m}/${date.getFullYear()}`
+}
+
 // ── API helpers ──
 
 async function fetchInvoices(params: { page: number; limit: number; direction: string; search: string }) {
@@ -373,7 +379,7 @@ export default function KsefInvoicesWidget(_props: InjectionWidgetComponentProps
                       : (inv.sellerName ?? inv.sellerTaxId ?? '-')}
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">
-                    {inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString() : '-'}
+                    {inv.invoiceDate ? formatDateDMY(new Date(inv.invoiceDate)) : '-'}
                   </td>
                   <td className="px-4 py-2 text-right font-mono">
                     {Number(inv.grossAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} {inv.currencyCode}

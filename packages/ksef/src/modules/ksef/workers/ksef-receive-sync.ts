@@ -16,6 +16,7 @@ import {
   extractLineItemsFromFa3,
 } from '../lib/xml-parser'
 import { emitKsefEvent } from '../events'
+import { ksefFetchWithRetry } from '../lib/rate-limit'
 import type { KsefAuthService } from '../services/auth.service'
 
 export const RECEIVE_SYNC_QUEUE_NAME = 'ksef-receive-sync'
@@ -128,14 +129,22 @@ export default async function handle(
           ...(pageNumber > 0 ? { pageOffset: pageNumber } : {}),
         }
 
-        const queryResponse = await fetch(queryUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
+        const queryResponse = await ksefFetchWithRetry(
+          queryUrl,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(pageBody),
           },
-          body: JSON.stringify(pageBody),
-        })
+          {
+            onRetry: async (attempt, waitMs) => {
+              await log.info(`Rate limited by KSeF, waiting ${Math.ceil(waitMs / 1000)}s before retry (attempt ${attempt + 1})`, { attempt, waitMs })
+            },
+          },
+        )
 
         if (!queryResponse.ok) {
           const errorBody = await queryResponse.text()
@@ -253,7 +262,7 @@ async function importReceivedInvoice(
 
   // Download full invoice XML (v2 returns raw XML, v1 returned JSON with base64)
   const downloadUrl = getInvoiceByKsefNumberUrl(environment, ksefNumber)
-  const downloadResponse = await fetch(downloadUrl, {
+  const downloadResponse = await ksefFetchWithRetry(downloadUrl, {
     method: 'GET',
     headers: { 'Authorization': `Bearer ${accessToken}` },
   })
