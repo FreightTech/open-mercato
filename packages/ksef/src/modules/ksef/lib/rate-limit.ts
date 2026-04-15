@@ -12,9 +12,9 @@
 
 // ── Response body parsing ──
 
-const RETRY_MINS_SECS = /po\s+(\d+)\s+minut\w*\s+i\s+(\d+)\s+sekund\w*/i
-const RETRY_MINS_ONLY = /po\s+(\d+)\s+minut\w*/i
-const RETRY_SECS_ONLY = /po\s+(\d+)\s+sekund\w*/i
+const RETRY_MINS_SECS = /po\s+(\d+)\s+minut\S*\s+i\s+(\d+)\s+sekund\S*/i
+const RETRY_MINS_ONLY = /po\s+(\d+)\s+minut\S*/i
+const RETRY_SECS_ONLY = /po\s+(\d+)\s+sekund\S*/i
 
 /**
  * Extracts the retry delay (in ms) from KSeF's Polish-language 429 response body.
