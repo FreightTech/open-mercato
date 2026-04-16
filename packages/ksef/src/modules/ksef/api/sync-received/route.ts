@@ -18,12 +18,12 @@ export async function POST(request: NextRequest) {
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const tenantId = (auth.actorTenantId as string | undefined) || auth.tenantId
+  const tenantId = auth.tenantId
   if (!tenantId) {
     return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
   }
 
-  const organizationId = (auth.actorOrgId || auth.orgId) as string
+  const organizationId = auth.orgId as string
 
   let body: Record<string, unknown> = {}
   try {

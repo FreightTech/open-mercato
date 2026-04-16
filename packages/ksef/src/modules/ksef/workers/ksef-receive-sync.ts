@@ -126,6 +126,7 @@ export default async function handle(
       while (hasMore) {
         const pageBody = {
           ...requestBody,
+          pageSize: 100,
           ...(pageNumber > 0 ? { pageOffset: pageNumber } : {}),
         }
 
