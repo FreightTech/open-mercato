@@ -111,7 +111,6 @@ Every log entry includes:
 - `environment` - Detected from APP_URL
 - `tenantId` - Current tenant context
 - `organizationId` - Current organization context
-- `brandId` - Current brand context (from header)
 - `userId` - Authenticated user (if applicable)
 
 ### FMS Document Tracking
@@ -121,7 +120,7 @@ Complete lifecycle tracking for documents:
 ```typescript
 // Creation
 fms.document.created {
-  documentId, category, tenantId, organizationId, brandId
+  documentId, category, tenantId, organizationId
 }
 
 // Extraction
@@ -143,7 +142,7 @@ Track token consumption and costs:
 ```typescript
 ai.tokens.consumed {
   inputTokens, outputTokens, totalTokens,
-  model, provider, tenantId, organizationId, brandId
+  model, provider, tenantId, organizationId
 }
 ```
 

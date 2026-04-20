@@ -28,7 +28,6 @@ const registerTrackingCommand: CommandHandler<RegisterTrackingInput, {
   id: 'fms_tracking.tracking.register',
   async execute(rawInput, ctx) {
     const logCtx: TrackingLogContext = {
-      brandId: ctx.brandId,
       organizationId: rawInput.organizationId,
       tenantId: rawInput.tenantId,
     }

@@ -46,9 +46,8 @@ const crud = makeCrudRoute<FreighttechSettingsInput, FreighttechSettingsInput, R
 })
 
 export async function GET(req: Request) {
-  const brandId = req.headers.get('x-brand-id') ?? null
   const start = performance.now()
-  const baseLogCtx: TrackingLogContext = { brandId }
+  const baseLogCtx: TrackingLogContext = {}
 
   try {
     const container = await createRequestContainer()
@@ -71,7 +70,7 @@ export async function GET(req: Request) {
       })
     }
 
-    const logCtx: TrackingLogContext = { brandId, organizationId, tenantId: auth.tenantId }
+    const logCtx: TrackingLogContext = { organizationId, tenantId: auth.tenantId }
 
     const em = container.resolve('em') as any
     const record = await loadFreighttechTrackingSettings(em, {

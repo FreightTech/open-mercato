@@ -1,31 +1,26 @@
 "use client"
 
 import * as React from 'react'
-import { Wand2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@open-mercato/ui/primitives/card'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
-import type { SharedBrandSettings, BrandDefaults } from '../lib/shared-brand-settings'
+import type { SharedBrandSettings } from '../lib/shared-brand-settings'
 
 type BrandSettingsTabProps = {
   settings: SharedBrandSettings
-  brandDefaults: BrandDefaults | null
   saving: boolean
   onChange: (settings: SharedBrandSettings) => void
   onSave: () => Promise<void>
-  onApplyDefaults: () => void
 }
 
 export function BrandSettingsTab({
   settings,
-  brandDefaults,
   saving,
   onChange,
   onSave,
-  onApplyDefaults,
 }: BrandSettingsTabProps) {
   const t = useT()
 
@@ -53,71 +48,12 @@ export function BrandSettingsTab({
           </p>
         </div>
         <div className="flex gap-2">
-          {brandDefaults && (
-            <Button variant="outline" size="sm" onClick={onApplyDefaults}>
-              <Wand2 className="mr-2 h-4 w-4" />
-              {t('templates.brand.apply_defaults', 'Apply Brand Defaults')}
-            </Button>
-          )}
           <Button onClick={onSave} disabled={saving}>
             {saving && <Spinner className="mr-2 h-4 w-4" />}
             {t('templates.brand.save', 'Save Brand Settings')}
           </Button>
         </div>
       </div>
-
-      {/* Brand Defaults Info Card */}
-      {brandDefaults && (
-        <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-blue-800 dark:text-blue-200">
-              {t('templates.brand.defaults_available', 'Brand Defaults Available')}
-            </CardTitle>
-            <CardDescription className="text-blue-700 dark:text-blue-300">
-              {t(
-                'templates.brand.defaults_description',
-                'Click "Apply Brand Defaults" to auto-fill settings from your brand configuration.'
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pb-4">
-            <div className="flex flex-wrap gap-4 text-sm">
-              {brandDefaults.companyName && (
-                <div>
-                  <span className="text-muted-foreground">
-                    {t('templates.brand.default_company', 'Company:')}
-                  </span>{' '}
-                  <span className="font-medium">{brandDefaults.companyName}</span>
-                </div>
-              )}
-              {brandDefaults.primaryColor && (
-                <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground">
-                    {t('templates.brand.default_primary', 'Primary:')}
-                  </span>
-                  <div
-                    className="h-4 w-4 rounded border"
-                    style={{ backgroundColor: brandDefaults.primaryColor }}
-                  />
-                  <span className="font-mono text-xs">{brandDefaults.primaryColor}</span>
-                </div>
-              )}
-              {brandDefaults.accentColor && (
-                <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground">
-                    {t('templates.brand.default_accent', 'Accent:')}
-                  </span>
-                  <div
-                    className="h-4 w-4 rounded border"
-                    style={{ backgroundColor: brandDefaults.accentColor }}
-                  />
-                  <span className="font-mono text-xs">{brandDefaults.accentColor}</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Company Information */}
       <Card>
@@ -156,7 +92,7 @@ export function BrandSettingsTab({
               <p className="text-xs text-muted-foreground">
                 {t(
                   'templates.brand.logo_url_hint',
-                  'Enter a URL or data URI. Brand defaults will provide a data URI if available.'
+                  'Enter a URL or data URI for your company logo.'
                 )}
               </p>
             </div>

@@ -47,14 +47,9 @@ export async function GET(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
     }
 
-    const brandIdHeader = request.headers.get('x-brand-id')
-    const brandIdCookie = (request as any).cookies?.get('om_brand_id')?.value
-    const brandId = brandIdHeader || brandIdCookie
-
     const pdfBuffer = await generateOfferPdf(offerId, em, {
       tenantId: auth.tenantId,
       organizationId: offer.organizationId,
-      brandId: brandId || undefined,
       userId: auth.userId || undefined,
     })
 

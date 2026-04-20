@@ -154,7 +154,6 @@ export async function POST(request: NextRequest) {
     const { document, attachment } = result
 
     // Track document creation
-    const brandId = request.headers.get('x-brand-id') ?? 'unknown'
     logger.info(`Document created: ${document.name}`, {
       event: 'documents.document.created',
       documentId: document.id,
@@ -163,14 +162,12 @@ export async function POST(request: NextRequest) {
       fileSize: attachment.fileSize,
       tenantId: document.tenantId,
       organizationId: document.organizationId,
-      brandId,
     })
 
     documentCounter.add(1, {
       category: document.category,
       tenantId: document.tenantId ?? 'unknown',
       organizationId: document.organizationId ?? 'unknown',
-      brandId,
     })
 
     // Extract and store page images for PDF files

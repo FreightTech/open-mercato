@@ -269,7 +269,6 @@ export async function POST(request: NextRequest) {
     const invoice = result as { id: string }
 
     // Log invoice creation
-    const brandId = request.headers.get('x-brand-id') || undefined
     logger.info('fms.invoice.created', {
       invoiceId: invoice.id,
       invoiceNumber: invoiceData.invoiceNumber,
@@ -278,7 +277,6 @@ export async function POST(request: NextRequest) {
       lineItemsCount: lineItems.length,
       tenantId: tenantId as string,
       organizationId: organizationId as string,
-      brandId,
     })
 
     // Emit metrics
@@ -286,7 +284,6 @@ export async function POST(request: NextRequest) {
       documentType: extractionResult.documentType || 'unknown',
       tenantId: tenantId as string,
       organizationId: organizationId as string,
-      brandId: brandId || 'unknown',
     })
 
     // Extract and store page images for PDF files

@@ -172,14 +172,12 @@ const updateDocumentCommand: CommandHandler<UpdateDocumentInput, { id: string }>
     const changedFields = Object.keys(input).filter(k => k !== 'id' && k !== 'updatedBy')
 
     // Log update
-    const brandId = ctx.request?.headers.get('x-brand-id') || undefined
     logger.info('fms.document.updated', {
       documentId: record.id,
       category: record.category,
       changedFields,
       tenantId: record.tenantId,
       organizationId: record.organizationId,
-      brandId,
     })
 
     // Emit metrics
@@ -187,7 +185,6 @@ const updateDocumentCommand: CommandHandler<UpdateDocumentInput, { id: string }>
       category: record.category || 'unknown',
       tenantId: record.tenantId,
       organizationId: record.organizationId,
-      brandId: brandId || 'unknown',
     })
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
@@ -289,13 +286,11 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
     await em.flush()
 
     // Log deletion
-    const brandId = ctx.request?.headers.get('x-brand-id') || undefined
     logger.info('fms.document.deleted', {
       documentId: record.id,
       category: record.category,
       tenantId: record.tenantId,
       organizationId: record.organizationId,
-      brandId,
     })
 
     // Emit metrics
@@ -303,7 +298,6 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
       category: record.category || 'unknown',
       tenantId: record.tenantId,
       organizationId: record.organizationId,
-      brandId: brandId || 'unknown',
     })
 
     const de = ctx.container.resolve('dataEngine') as DataEngine

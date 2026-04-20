@@ -98,9 +98,8 @@ function buildScopeFilters(
  * Creates a tracking job and syncs discovered containers to the project.
  */
 export async function POST(request: Request): Promise<NextResponse> {
-  const brandId = request.headers.get('x-brand-id') ?? null
   const start = performance.now()
-  const baseLogCtx: FmsLogContext = { brandId }
+  const baseLogCtx: FmsLogContext = {}
 
   try {
     const auth = await getAuthFromRequest(request)
@@ -148,7 +147,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       )
     }
 
-    const logCtx: FmsLogContext = { brandId, organizationId, tenantId }
+    const logCtx: FmsLogContext = { organizationId, tenantId }
 
     logger.info('start', {
       projectId,

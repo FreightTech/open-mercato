@@ -36,7 +36,6 @@ async function loadTemplate(templateType: string): Promise<TemplateResponse> {
     method: 'GET',
     headers: {
       'Cookie': cookieStore.toString(),
-      'x-brand-id': headersList.get('x-brand-id') || '',
     },
     cache: 'no-store',
   })

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from 'react'
-import { Eye, Wand2 } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Label } from '@open-mercato/ui/primitives/label'
@@ -47,16 +47,7 @@ type EmailSettings = {
   replyToEmail?: string | null
 }
 
-type BrandDefaults = {
-  companyName?: string | null
-  companyLogoUrl?: string | null
-  primaryColor?: string
-  accentColor?: string
-}
-
-type EmailSettingsResponse = EmailSettings & {
-  brandDefaults?: BrandDefaults | null
-}
+type EmailSettingsResponse = EmailSettings
 
 type EmailTemplate = {
   templateType: TemplateType
@@ -85,7 +76,6 @@ export function EmailTemplateSettings() {
   const scopeVersion = useOrganizationScopeVersion()
 
   const [settings, setSettings] = React.useState<EmailSettings>(DEFAULT_SETTINGS)
-  const [brandDefaults, setBrandDefaults] = React.useState<BrandDefaults | null>(null)
   const [templates, setTemplates] = React.useState<EmailTemplate[]>([])
 
   const [loading, setLoading] = React.useState(true)
@@ -101,31 +91,10 @@ export function EmailTemplateSettings() {
     try {
       const call = await apiCall<EmailSettingsResponse>('/api/email_templates/settings')
       if (call.ok && call.result) {
-        const { brandDefaults: bd, ...settingsData } = call.result
-        setBrandDefaults(bd ?? null)
-
-        // Auto-populate empty fields from brand defaults on first load
-        const hasExistingData =
-          settingsData.companyName ||
-          settingsData.companyLogoUrl ||
-          (settingsData.primaryColor && settingsData.primaryColor !== '#1a365d') ||
-          (settingsData.accentColor && settingsData.accentColor !== '#f7fafc')
-
-        if (!hasExistingData && bd) {
-          setSettings({
-            ...DEFAULT_SETTINGS,
-            ...settingsData,
-            companyName: bd.companyName || settingsData.companyName || '',
-            companyLogoUrl: bd.companyLogoUrl || settingsData.companyLogoUrl || '',
-            primaryColor: bd.primaryColor || settingsData.primaryColor || '#1a365d',
-            accentColor: bd.accentColor || settingsData.accentColor || '#f7fafc',
-          })
-        } else {
-          setSettings({
-            ...DEFAULT_SETTINGS,
-            ...settingsData,
-          })
-        }
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...call.result,
+        })
       } else {
         flash(t('email_templates.errors.load_settings', 'Failed to load email settings'), 'error')
       }
@@ -175,18 +144,6 @@ export function EmailTemplateSettings() {
     (event: React.ChangeEvent<HTMLInputElement>) => {
       setSettings((prev) => ({ ...prev, [key]: event.target.value }))
     }
-
-  const handleApplyBrandDefaults = React.useCallback(() => {
-    if (!brandDefaults) return
-    setSettings((prev) => ({
-      ...prev,
-      companyName: brandDefaults.companyName || prev.companyName,
-      companyLogoUrl: brandDefaults.companyLogoUrl || prev.companyLogoUrl,
-      primaryColor: brandDefaults.primaryColor || prev.primaryColor,
-      accentColor: brandDefaults.accentColor || prev.accentColor,
-    }))
-    flash(t('email_templates.messages.brand_defaults_applied', 'Brand defaults applied'), 'info')
-  }, [brandDefaults, t])
 
   const handleSaveSettings = React.useCallback(
     async (event: React.FormEvent) => {
@@ -328,29 +285,13 @@ export function EmailTemplateSettings() {
         <TabsContent value="settings" className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>{t('email_templates.settings.title', 'Email Settings')}</CardTitle>
-                  <CardDescription>
-                    {t(
-                      'email_templates.settings.description',
-                      'Configure default email layout and branding'
-                    )}
-                  </CardDescription>
-                </div>
-                {brandDefaults && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleApplyBrandDefaults}
-                    disabled={saving}
-                  >
-                    <Wand2 className="mr-2 h-4 w-4" />
-                    {t('email_templates.settings.apply_brand_defaults', 'Apply Brand Defaults')}
-                  </Button>
+              <CardTitle>{t('email_templates.settings.title', 'Email Settings')}</CardTitle>
+              <CardDescription>
+                {t(
+                  'email_templates.settings.description',
+                  'Configure default email layout and branding'
                 )}
-              </div>
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSaveSettings} className="space-y-6">

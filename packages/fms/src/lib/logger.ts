@@ -6,7 +6,6 @@
 type LogPayload = Record<string, unknown>
 
 export interface FmsLogContext {
-  brandId?: string | null
   organizationId?: string | null
   tenantId?: string | null
 }
@@ -19,7 +18,6 @@ export function getLogContext(module: string, ctx?: FmsLogContext): LogPayload {
   return {
     module,
     service: getServiceName(),
-    brandId: ctx?.brandId ?? null,
     organizationId: ctx?.organizationId ?? null,
     tenantId: ctx?.tenantId ?? null,
   }

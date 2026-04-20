@@ -216,7 +216,6 @@ Purpose: Track webhook delivery success/failure rate
 Use `group by` to break down results by dimension:
 - `tenantId` - Per tenant
 - `organizationId` - Per organization
-- `brandId` - Per brand
 - `category` - Document category
 - `model` - AI model
 

@@ -344,28 +344,10 @@ UnifiedTemplateSettings
 
 ```typescript
 // Load all settings (source: email_settings table)
-const { brand, brandDefaults, email } = await loadAllTemplateSettings()
+const { brand, email } = await loadAllTemplateSettings()
 
 // Save brand settings (syncs to email module)
 await syncBrandSettingsToAll(brandSettings)
-
-// Apply brand defaults from registry (auto-populate from x-brand-id)
-if (!hasBrandCustomizations(current) && brandDefaults) {
-  setBrandSettings(applyBrandDefaults(current, brandDefaults))
-}
-```
-
-### Brand Defaults
-
-Brand defaults come from the brand registry (via `x-brand-id` header). If user hasn't customized settings, defaults are auto-applied:
-
-```typescript
-type BrandDefaults = {
-  companyName: string | null
-  companyLogoUrl: string | null  // data URI
-  primaryColor: string
-  accentColor: string
-}
 ```
 
 ---

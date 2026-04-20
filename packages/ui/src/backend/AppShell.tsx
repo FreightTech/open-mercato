@@ -18,7 +18,6 @@ import { PartialIndexBanner } from './indexes/PartialIndexBanner'
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { slugifySidebarId } from '@open-mercato/shared/modules/navigation/sidebarPreferences'
 import type { SectionNavGroup } from './section-page/types'
-import { useTheme } from '../theme/ThemeProvider'
 import { InjectionSpot } from './injection/InjectionSpot'
 import type { InjectionMenuItem } from '@open-mercato/shared/modules/widgets/injection'
 import { LEGACY_GLOBAL_MUTATION_INJECTION_SPOT_ID } from './injection/mutationEvents'
@@ -45,16 +44,6 @@ import {
 export type AppShellProps = {
   productName?: string
   email?: string
-  brandId?: string
-  brandLogo?: {
-    src: string
-    srcLight?: string
-    srcDark?: string
-    alt: string
-    name?: string
-    width?: number
-    height?: number
-  }
   groups: {
     id?: string
     name: string
@@ -370,26 +359,22 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-export function AppShell({ productName, email, brandId, brandLogo, groups, rightHeaderSlot, children, sidebarCollapsedDefault = false, currentTitle, breadcrumb, adminNavApi, version, settingsSectionTitle, settingsPathPrefixes = [], settingsSections, profileSections, profileSectionTitle, profilePathPrefixes = [], mobileSidebarSlot }: AppShellProps) {
+export function AppShell({ productName, email, groups, rightHeaderSlot, children, sidebarCollapsedDefault = false, currentTitle, breadcrumb, adminNavApi, version, settingsSectionTitle, settingsPathPrefixes = [], settingsSections, profileSections, profileSectionTitle, profilePathPrefixes = [], mobileSidebarSlot }: AppShellProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const t = useT()
   const locale = useLocale()
-  const { resolvedTheme } = useTheme()
   const { items: mainSidebarInjectedMenuItems } = useInjectedMenuItems('menu:sidebar:main')
   const { items: settingsSidebarInjectedMenuItems } = useInjectedMenuItems('menu:sidebar:settings')
   const { items: profileSidebarInjectedMenuItems } = useInjectedMenuItems('menu:sidebar:profile')
   const { items: topbarInjectedMenuItems } = useInjectedMenuItems('menu:topbar:actions')
   useEventBridge() // SSE DOM Event Bridge — singleton SSE connection for real-time server events
   const resolvedProductName = productName ?? t('appShell.productName')
-  // Brand logo resolution — supports theme-aware logos via srcLight/srcDark
-  const logoSrc = brandLogo
-    ? (resolvedTheme === 'dark' ? (brandLogo.srcDark ?? brandLogo.src) : (brandLogo.srcLight ?? brandLogo.src))
-    : '/open-mercato.svg'
-  const logoAlt = brandLogo?.alt ?? resolvedProductName
-  const logoWidth = brandLogo?.width ?? 32
-  const logoHeight = brandLogo?.height ?? 32
-  const logoName = brandLogo?.name
+  const logoSrc = '/open-mercato.svg'
+  const logoAlt = resolvedProductName
+  const logoWidth = 32
+  const logoHeight = 32
+  const logoName: string | undefined = undefined
   const [mobileOpen, setMobileOpen] = React.useState(false)
   // Initialize from server-provided prop only to avoid hydration flicker
   const [collapsed, setCollapsed] = React.useState(sidebarCollapsedDefault)

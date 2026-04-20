@@ -10,7 +10,6 @@ import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
 import { slugifySidebarId } from '@open-mercato/shared/modules/navigation/sidebarPreferences'
 import { applySidebarPreference, loadFirstRoleSidebarPreference, loadSidebarPreference } from '../../services/sidebarPreferencesService'
 import { Role } from '../../data/entities'
-import { resolveBrandFromRequest, applyBrandFiltering } from '@open-mercato/shared/modules/brands'
 
 export const metadata = {
   GET: { requireAuth: true },
@@ -317,12 +316,8 @@ export async function GET(req: Request) {
 
   const withPreference = applySidebarPreference(baseForUser, preference)
 
-  // Apply brand-level filtering for hidden modules and groups
-  const brandConfig = resolveBrandFromRequest(req)
-  const brandFilteredGroups = applyBrandFiltering(withPreference, brandConfig)
-
   const payload = {
-    groups: brandFilteredGroups.map((group) => ({
+    groups: withPreference.map((group) => ({
       id: group.id,
       name: group.name,
       defaultName: group.defaultName,

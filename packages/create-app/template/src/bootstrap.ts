@@ -42,9 +42,7 @@ import { injectionTables } from '@/.mercato/generated/injection-tables.generated
 import { searchModuleConfigs } from '@/.mercato/generated/search.generated'
 import { eventModuleConfigs, allEvents } from '@/.mercato/generated/events.generated'
 import { registerEventModuleConfigs } from '@open-mercato/shared/modules/events'
-import { registerBrands } from '@open-mercato/shared/modules/brands'
 import { analyticsModuleConfigs } from '@/.mercato/generated/analytics.generated'
-import { brands, defaultBrand } from './brands/registry'
 import { enricherEntries } from '@/.mercato/generated/enrichers.generated'
 import { interceptorEntries } from '@/.mercato/generated/interceptors.generated'
 import { componentOverrideEntries } from '@/.mercato/generated/component-overrides.generated'
@@ -62,9 +60,6 @@ registerEventModuleConfigs(eventModuleConfigs)
 registerMessageTypes(messageTypes, { replace: true })
 registerMessageObjectTypes(messageObjectTypes, { replace: true })
 runBootstrapRegistrations()
-
-// Register brand configurations for domain detection and filtering
-registerBrands(brands, defaultBrand)
 
 // Bootstrap factory from shared package
 import { createBootstrap, isBootstrapped } from '@open-mercato/shared/lib/bootstrap'
