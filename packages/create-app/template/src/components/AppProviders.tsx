@@ -16,6 +16,7 @@ type AppProvidersProps = {
   locale: Locale
   dict: Dict
   demoModeEnabled: boolean
+  noticeBarsEnabled: boolean
   brandTheme?: {
     colors?: ThemeColors
     light?: ThemeColors
@@ -23,7 +24,7 @@ type AppProvidersProps = {
   }
 }
 
-export function AppProviders({ children, locale, dict, demoModeEnabled, brandTheme }: AppProvidersProps) {
+export function AppProviders({ children, locale, dict, demoModeEnabled, noticeBarsEnabled, brandTheme }: AppProvidersProps) {
   return (
     <I18nProvider locale={locale} dict={dict}>
       <ClientBootstrapProvider>
@@ -36,7 +37,7 @@ export function AppProviders({ children, locale, dict, demoModeEnabled, brandThe
           >
             <QueryProvider>
               <FrontendLayout footer={<AuthFooter />}>{children}</FrontendLayout>
-              <GlobalNoticeBars demoModeEnabled={demoModeEnabled} />
+              {noticeBarsEnabled ? <GlobalNoticeBars demoModeEnabled={demoModeEnabled} /> : null}
             </QueryProvider>
           </BrandThemeProvider>
         </ThemeProvider>
