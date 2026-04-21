@@ -150,6 +150,21 @@ export async function resolveLocationNamesFromIds(
   }
 }
 
+/**
+ * Resolve a contractor's display name for PDF/preview steps.
+ * Falls back to companyName when the contractor cannot be resolved.
+ */
+export async function resolveClientDisplayName(input: {
+  contractorId?: string | null
+  companyName?: string | null
+}): Promise<string | null> {
+  if (input.contractorId) {
+    const cRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${input.contractorId}`)
+    if (cRes.ok && cRes.result?.name) return cRes.result.name
+  }
+  return input.companyName || null
+}
+
 /** Resolve carrier and provider names from IDs */
 export async function resolveCarrierProviderNames(
   carrierIds: string[],

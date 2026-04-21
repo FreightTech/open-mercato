@@ -20,6 +20,7 @@ import {
   reindexSet,
   resolveItemLocations,
   createCalculationForItem,
+  resolveClientDisplayName,
 } from './wizard-utils'
 
 type UseRfqWizardStateInput = {
@@ -73,6 +74,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   // Special terms (custom conditions for PDF)
   const [specialTerms, setSpecialTerms] = useState('')
 
+  // Resolved client display name for PDF/preview (contractor name → companyName fallback)
+  const [clientDisplayName, setClientDisplayName] = useState<string>('')
+
   // UI state
   const [expandedBoxes, setExpandedBoxes] = useState<Set<number>>(new Set())
   const [editingItems, setEditingItems] = useState<Set<number>>(new Set())
@@ -103,6 +107,22 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     enabled: !!rfqId && open && mode === 'existing',
     staleTime: Infinity,
   })
+
+  // Resolve client display name from RFQ (contractor → companyName fallback)
+  const clientNameResolvedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!rfqDetail) return
+    const key = `${rfqDetail.contractorId ?? ''}::${rfqDetail.companyName ?? ''}`
+    if (clientNameResolvedRef.current === key) return
+    clientNameResolvedRef.current = key
+    ;(async () => {
+      const resolved = await resolveClientDisplayName({
+        contractorId: rfqDetail.contractorId,
+        companyName: rfqDetail.companyName,
+      })
+      if (mountedRef.current) setClientDisplayName(resolved || '')
+    })()
+  }, [rfqDetail])
 
   // Fetch full offer details for existing RFQ
   const offerIds = rfqDetail?.offers?.map((o) => o.id) || []
@@ -1116,6 +1136,8 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     setCreating(false)
     setSending(false)
     setSpecialTerms('')
+    setClientDisplayName('')
+    clientNameResolvedRef.current = null
     setEditableItems([])
     setCalculations([])
     setOfferId(null)
@@ -1164,6 +1186,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     draftOffer,
     specialTerms,
     updateSpecialTerms,
+    clientDisplayName,
 
     // UI state
     expandedBoxes,
