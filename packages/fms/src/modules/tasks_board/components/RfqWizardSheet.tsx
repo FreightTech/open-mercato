@@ -54,20 +54,26 @@ export function RfqWizardSheet({
     }
   }, [editingTabLabel])
 
-  const { rfqId: stateRfqId, reset: stateReset } = state
+  const { rfqId: stateRfqId, reset: stateReset, flushPendingSync: stateFlushPendingSync } = state
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen) {
-        if (stateRfqId) {
-          queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-          queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
-        }
-        stateReset()
+        // Flush any debounced charge row / item field syncs before the reset
+        // clears their timers — otherwise lines typed just before close are lost.
+        void stateFlushPendingSync().finally(() => {
+          if (stateRfqId) {
+            queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+            queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
+          }
+          stateReset()
+          onOpenChange(nextOpen)
+        })
+        return
       }
       onOpenChange(nextOpen)
     },
-    [onOpenChange, stateRfqId, stateReset, queryClient],
+    [onOpenChange, stateRfqId, stateReset, stateFlushPendingSync, queryClient],
   )
 
   const handleDelete = useCallback(() => {

@@ -73,10 +73,14 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
   }, [statusDropdownOpen])
 
   const handleClose = useCallback(() => {
-    state.reset()
-    queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
-    onOpenChange(false)
-    onCloseAll?.()
+    // Flush debounced charge row / item field syncs before reset clears their
+    // timers — otherwise lines typed just before close never reach the server.
+    void state.flushPendingSync().finally(() => {
+      state.reset()
+      queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+      onOpenChange(false)
+      onCloseAll?.()
+    })
   }, [state, onOpenChange, queryClient, onCloseAll])
 
   const handleOpenChange = useCallback(
