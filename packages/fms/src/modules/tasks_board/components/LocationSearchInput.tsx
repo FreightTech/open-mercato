@@ -56,12 +56,26 @@ export function LocationSearchInput({
 
   const options = data || []
 
-  // Resolve selected item: use cache first, fall back to searching options
+  const { data: resolvedById } = useQuery({
+    queryKey: ['task-board-location-by-id', value],
+    queryFn: async () => {
+      const result = await apiCall<LocationItem>(`/api/fms_locations/locations/${value}`)
+      return result.result || null
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: !!value,
+  })
+
+  // Resolve selected item: use cache first, fall back to searching options or the by-id fetch
   const selectedItem = value
-    ? (cachedItem?.id === value ? cachedItem : options.find((item) => item.id === value) || cachedItem)
+    ? (cachedItem?.id === value
+        ? cachedItem
+        : options.find((item) => item.id === value)
+          || (resolvedById?.id === value ? resolvedById : null)
+          || cachedItem)
     : null
 
-  // Keep cache in sync when we find the item in options
+  // Keep cache in sync when we find the item in options or via the by-id fetch
   useEffect(() => {
     if (value && options.length > 0) {
       const found = options.find((item) => item.id === value)
@@ -69,6 +83,12 @@ export function LocationSearchInput({
     }
     if (!value) setCachedItem(null)
   }, [value, options])
+
+  useEffect(() => {
+    if (value && resolvedById?.id === value) {
+      setCachedItem(resolvedById)
+    }
+  }, [value, resolvedById])
 
   const showDropdown = isFocused && (searchQuery.length > 0 || options.length > 0)
 

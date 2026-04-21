@@ -23,6 +23,7 @@ import {
   resolveClientDisplayName,
   saveItemFieldsToServer,
   resolveLocationNamesFromIds,
+  resolveMissingLocationIds,
   resolveCarrierProviderNames,
 } from './wizard-utils'
 
@@ -116,23 +117,10 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [initialRfqId, mode])
 
-  // Invalidate RFQ / offer caches whenever the wizard transitions from
-  // closed → open so reopening after edits shows server truth. Radix Sheet
-  // keeps this hook mounted across open/close cycles, so refetchOnMount
-  // alone is not enough — but invalidateQueries on an active observer
-  // triggers an immediate refetch.
-  const prevOpenRef = useRef(false)
-  useEffect(() => {
-    if (open && !prevOpenRef.current && rfqId) {
-      queryClient.invalidateQueries({ queryKey: ['rfq-detail', rfqId] })
-      queryClient.invalidateQueries({ queryKey: ['offer'] })
-    }
-    prevOpenRef.current = open
-  }, [open, rfqId, queryClient])
-
-  // Fetch RFQ detail for existing mode — refetch on each wizard mount so
-  // reopening after edits reflects server truth, but treat the fetched data
-  // as stable while the wizard stays open.
+  // Fetch RFQ detail for existing mode. The close handler in RfqWizardSheet
+  // wipes ['rfq-detail', id] + ['offer'] caches after the wizard settles, so
+  // reopening always starts with an empty cache and refetches fresh — the
+  // one-shot init gates below are safe because they never see stale data.
   const { data: rfqDetail } = useQuery({
     queryKey: ['rfq-detail', rfqId],
     queryFn: async () => {
@@ -384,6 +372,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       await Promise.resolve()
       if (!mountedRef.current) return
       await resolveLocationNamesFromIds(editableItemsRef.current, mountedRef, setEditableItems)
+      await resolveMissingLocationIds(
+        editableItemsRef.current,
+        calculationIdsRef.current,
+        mountedRef,
+        setEditableItems,
+      )
       await resolveCarrierProviderNames(
         draftOffer.carrierIds ?? [],
         draftOffer.providerIds ?? [],

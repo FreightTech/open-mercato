@@ -16,6 +16,7 @@ import {
   saveItemFieldsToServer,
   createCalculationForItem,
   resolveLocationNamesFromIds,
+  resolveMissingLocationIds,
   resolveCarrierProviderNames,
   resolveClientDisplayName,
 } from '../../tasks_board/lib/wizard-utils'
@@ -63,6 +64,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
   // Draft offer tracking
   const [offerId, setOfferId] = useState<string | null>(null)
   const [offerNumber, setOfferNumber] = useState<string | null>(null)
+  const [rfqId, setRfqId] = useState<string | null>(null)
   const [calculationIds, setCalculationIds] = useState<string[]>([])
 
   // Multi-offer tabs
@@ -105,6 +107,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       setOfferId(offer.id)
       offerIdRef.current = offer.id
       setOfferNumber(offer.offerNumber || null)
+      setRfqId(offer.rfqId || offer.rfq?.id || null)
       setOfferType(offer.type || 'sell')
       setOfferStatus(offer.status || 'draft')
       setProjects(offer.projects || [])
@@ -177,9 +180,9 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       allItems.push({
         containerType: mainCalc.containers?.[0] || null,
         containerCount: mainCalc.containers?.length || null,
-        origin: null,
+        origin: offer.rfq?.origin ?? null,
         originLocationId: mainCalc.originLocationId || null,
-        destination: null,
+        destination: offer.rfq?.destination ?? null,
         destinationLocationId: mainCalc.destinationLocationId || null,
         placeOfLoading: null,
         placeOfLoadingId: mainCalc.placeOfLoadingId || null,
@@ -245,6 +248,9 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
 
       // Resolve location names from IDs for all items
       await resolveLocationNamesFromIds(allItems, mountedRef, setEditableItems)
+
+      // Self-heal: resolve missing location IDs from text for legacy offers
+      await resolveMissingLocationIds(allItems, allCalcIds, mountedRef, setEditableItems)
 
       // Resolve carrier/provider names from IDs (offer-level, applied to item 0)
       await resolveCarrierProviderNames(
@@ -648,6 +654,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     // Restore offer-level fields
     setOfferType(offer.type || 'sell')
     setOfferStatus(offer.status || 'draft')
+    setRfqId(offer.rfqId || offer.rfq?.id || null)
     setDirection(offer.direction || null)
     setTransportMode(offer.transportMode || null)
     setCargoType(offer.cargoType || null)
@@ -681,9 +688,9 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       newItems.push({
         containerType: mainCalc.containers?.[0] || null,
         containerCount: mainCalc.containers?.length || null,
-        origin: null,
+        origin: offer.rfq?.origin ?? null,
         originLocationId: mainCalc.originLocationId || null,
-        destination: null,
+        destination: offer.rfq?.destination ?? null,
         destinationLocationId: mainCalc.destinationLocationId || null,
         placeOfLoading: null,
         placeOfLoadingId: mainCalc.placeOfLoadingId || null,
@@ -747,6 +754,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
 
     // Resolve location names and carrier/provider names for the switched offer's items
     await resolveLocationNamesFromIds(newItems, mountedRef, setEditableItems)
+    await resolveMissingLocationIds(newItems, newCalcIds, mountedRef, setEditableItems)
     await resolveCarrierProviderNames(
       offer.carrierIds || [],
       offer.providerIds || [],
@@ -779,6 +787,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setCalculations([{ chargeRows: [] }])
     setOfferId(null)
     setOfferNumber(null)
+    setRfqId(null)
     setProjects([])
     setCalculationIds([])
     setOfferTabs([])
@@ -831,6 +840,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     // Draft offer
     offerId,
     offerNumber,
+    rfqId,
     calculationIds,
     specialTerms,
     updateSpecialTerms,

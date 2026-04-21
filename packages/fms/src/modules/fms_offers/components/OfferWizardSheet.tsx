@@ -350,7 +350,7 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
 
                 <OfferContextPanel
                   offerId={state.offerId}
-                  rfqId={null}
+                  rfqId={state.rfqId}
                   contractorIdProp={state.contractorId}
                   contractorNameProp={state.contractorName}
                   onContractorChangeProp={state.handleContractorChange}
