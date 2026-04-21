@@ -164,7 +164,7 @@ export function createMessagingService(options?: MessagingServiceOptions): IMess
     },
 
     async healthCheck(): Promise<Record<MessagingDriverId, boolean>> {
-      const results: Record<MessagingDriverId, boolean> = {}
+      const results = {} as Record<MessagingDriverId, boolean>
 
       await Promise.all(
         Array.from(drivers.entries()).map(async ([id, driver]) => {

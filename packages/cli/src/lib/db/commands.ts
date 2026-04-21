@@ -206,6 +206,7 @@ function getMigrationsPath(entry: ModuleEntry, resolver: PackageResolver): strin
 
 export interface DbOptions {
   quiet?: boolean
+  initial?: boolean
 }
 
 export interface GreenfieldOptions extends DbOptions {
