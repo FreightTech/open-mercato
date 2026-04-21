@@ -288,7 +288,6 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     if (!draftOffer) return
     if (draftLinesLoadedRef.current) return
     draftLinesLoadedRef.current = true
-    console.log('[RfqWizard:DIAG] draftOffer loaded, id:', draftOffer.id, 'calcs:', draftOffer.calculations?.length)
     if (draftOffer.specialTerms) setSpecialTerms(draftOffer.specialTerms)
 
     // Calculations per route. The server persists route data on the main_freight
