@@ -355,7 +355,7 @@ export function RfqWizardSheet({
                     onSpecialTermsChange={state.updateSpecialTerms}
                     initialBaseCurrency={state.draftOffer?.baseCurrency}
                     initialExchangeRates={state.draftOffer?.exchangeRates}
-                    clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
+                    clientName={state.clientDisplayName || state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
                     offerTabs={state.offerTabs}
                     pdfMode={pdfMode}
                     onPdfModeChange={setPdfMode}
@@ -452,7 +452,7 @@ export function RfqWizardSheet({
         <SendOfferDialog
           offerId={state.offerId}
           offerNumber={state.offerNumber || ''}
-          clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
+          clientName={state.clientDisplayName || state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
           currentStatus="draft"
           open={sendDialogOpen}
           onClose={() => setSendDialogOpen(false)}

@@ -20,6 +20,10 @@ import {
   reindexSet,
   resolveItemLocations,
   createCalculationForItem,
+  resolveClientDisplayName,
+  saveItemFieldsToServer,
+  resolveLocationNamesFromIds,
+  resolveCarrierProviderNames,
 } from './wizard-utils'
 
 type UseRfqWizardStateInput = {
@@ -73,6 +77,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   // Special terms (custom conditions for PDF)
   const [specialTerms, setSpecialTerms] = useState('')
 
+  // Resolved client display name for PDF/preview (contractor name → companyName fallback)
+  const [clientDisplayName, setClientDisplayName] = useState<string>('')
+
   // UI state
   const [expandedBoxes, setExpandedBoxes] = useState<Set<number>>(new Set())
   const [editingItems, setEditingItems] = useState<Set<number>>(new Set())
@@ -103,6 +110,22 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     enabled: !!rfqId && open && mode === 'existing',
     staleTime: Infinity,
   })
+
+  // Resolve client display name from RFQ (contractor → companyName fallback)
+  const clientNameResolvedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!rfqDetail) return
+    const key = `${rfqDetail.contractorId ?? ''}::${rfqDetail.companyName ?? ''}`
+    if (clientNameResolvedRef.current === key) return
+    clientNameResolvedRef.current = key
+    ;(async () => {
+      const resolved = await resolveClientDisplayName({
+        contractorId: rfqDetail.contractorId,
+        companyName: rfqDetail.companyName,
+      })
+      if (mountedRef.current) setClientDisplayName(resolved || '')
+    })()
+  }, [rfqDetail])
 
   // Fetch full offer details for existing RFQ
   const offerIds = rfqDetail?.offers?.map((o) => o.id) || []
@@ -249,17 +272,60 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     draftLinesLoadedRef.current = true
     console.log('[RfqWizard:DIAG] draftOffer loaded, id:', draftOffer.id, 'calcs:', draftOffer.calculations?.length)
     if (draftOffer.specialTerms) setSpecialTerms(draftOffer.specialTerms)
-    const calcs = draftOffer.calculations || []
-    if (calcs.length > 0) {
-      // Map each calculation's lines to the corresponding item's chargeRows
-      const hasAnyLines = calcs.some((c) => c.lines.length > 0)
+
+    // Route-level calculations (exclude section-only main_freight/origin/destination rows used for charge grouping)
+    const SECTION_TYPES = new Set(['main_freight', 'origin', 'destination'])
+    const allCalcs = draftOffer.calculations || []
+    const routeCalcs = allCalcs.filter((c) => !c.sectionType || !SECTION_TYPES.has(c.sectionType))
+
+    // Hydrate editable items with persisted route info (containers, IDs, offer-level fields)
+    // Only hydrate when items either have unresolved IDs (no ID stored) or the server has data we haven't loaded.
+    if (routeCalcs.length > 0) {
+      setEditableItems((prev) => {
+        if (prev.length === 0) return prev
+        const hydrated = prev.map((item, idx) => {
+          const rc = routeCalcs[idx]
+          if (!rc) return item
+          const inheritOfferLevel = idx === 0
+          return {
+            ...item,
+            containerType: item.containerType ?? rc.containers?.[0] ?? null,
+            containerCount: item.containerCount ?? (rc.containers?.length || null),
+            originLocationId: item.originLocationId ?? rc.originLocationId ?? null,
+            destinationLocationId: item.destinationLocationId ?? rc.destinationLocationId ?? null,
+            placeOfLoadingId: item.placeOfLoadingId ?? rc.placeOfLoadingId ?? null,
+            placeOfDeliveryId: item.placeOfDeliveryId ?? rc.placeOfDeliveryId ?? null,
+            incoterm: inheritOfferLevel ? (item.incoterm ?? draftOffer.incoterm ?? null) : item.incoterm,
+            transportMode: inheritOfferLevel ? (item.transportMode ?? draftOffer.transportMode ?? null) : item.transportMode,
+            cargoDescription: inheritOfferLevel ? (item.cargoDescription ?? draftOffer.customerNotes ?? null) : item.cargoDescription,
+            carrierIds: inheritOfferLevel && (!item.carrierIds || item.carrierIds.length === 0)
+              ? (draftOffer.carrierIds ?? [])
+              : item.carrierIds,
+            providerIds: inheritOfferLevel && (!item.providerIds || item.providerIds.length === 0)
+              ? (draftOffer.providerIds ?? [])
+              : item.providerIds,
+          }
+        })
+        return hydrated
+      })
+
+      // Expand POL/POD slots so the user sees the loaded values (mirrors stored IDs)
+      const polIndexes = routeCalcs.reduce<number[]>((acc, rc, idx) => rc.placeOfLoadingId ? [...acc, idx] : acc, [])
+      const podIndexes = routeCalcs.reduce<number[]>((acc, rc, idx) => rc.placeOfDeliveryId ? [...acc, idx] : acc, [])
+      if (polIndexes.length > 0) setExpandedPol((prev) => { const n = new Set(prev); polIndexes.forEach((i) => n.add(i)); return n })
+      if (podIndexes.length > 0) setExpandedPod((prev) => { const n = new Set(prev); podIndexes.forEach((i) => n.add(i)); return n })
+    }
+
+    // Map charge rows from calculation lines to their route-indexed chargeRows buckets
+    if (allCalcs.length > 0) {
+      const hasAnyLines = allCalcs.some((c) => c.lines.length > 0)
       if (hasAnyLines) {
         setCalculations((prev) => {
           const updated = [...prev]
-          for (let i = 0; i < calcs.length; i++) {
-            if (calcs[i].lines.length > 0) {
-              const calcSectionType = (calcs[i] as any).sectionType || null
-              const rows = calcs[i].lines.map((line) => {
+          for (let i = 0; i < allCalcs.length; i++) {
+            if (allCalcs[i].lines.length > 0) {
+              const calcSectionType = (allCalcs[i] as any).sectionType || null
+              const rows = allCalcs[i].lines.map((line) => {
                 const row = offerLineToChargeRow(line)
                 if (calcSectionType && !row.sectionType) row.sectionType = calcSectionType
                 return row
@@ -273,9 +339,22 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
           }
           return updated
         })
-        return // Don't populate with default products
       }
     }
+
+    // Resolve location names and carrier/provider names for display
+    ;(async () => {
+      // Use a short microtask to let the setEditableItems above flush first
+      await Promise.resolve()
+      if (!mountedRef.current) return
+      await resolveLocationNamesFromIds(editableItemsRef.current, mountedRef, setEditableItems)
+      await resolveCarrierProviderNames(
+        draftOffer.carrierIds ?? [],
+        draftOffer.providerIds ?? [],
+        mountedRef,
+        setEditableItems,
+      )
+    })()
   }, [draftOffer])
 
   // Initialize empty calculations when items change (if not loaded from draft)
@@ -644,8 +723,13 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     await ensureDraftOffer()
     await flushChargeSync()
 
-    // Clean up orphaned server lines that are no longer in client state
+    // Persist item-level fields (origin/destination/POL/POD IDs, carriers, incoterm, transport mode)
     const oid = offerIdRef.current
+    if (oid) {
+      await saveItemFieldsToServer(oid, editableItemsRef.current, calculationIdsRef.current)
+    }
+
+    // Clean up orphaned server lines that are no longer in client state
     if (oid) {
       const calcs = calculationsRef.current
       const clientRowIds = new Set<string>()
@@ -697,15 +781,45 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }, 300)
   }, [])
 
+  // Debounced sync of RFQ top-level route fields (origin/destination/POL/POD — item 0 only)
+  // Keeps the task-board read path in sync so ports display via a proper location reference
+  // (ID + name) rather than a stale free-text name.
+  const rfqRouteSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const syncRfqRouteFields = useCallback((patch: Partial<WizardItem>) => {
+    const currentRfqId = rfqIdRef.current
+    if (!currentRfqId) return
+    const rfqPatch: Record<string, unknown> = {}
+    if ('originLocationId' in patch) rfqPatch.originLocationId = patch.originLocationId || null
+    if ('origin' in patch) rfqPatch.origin = patch.origin || null
+    if ('destinationLocationId' in patch) rfqPatch.destinationLocationId = patch.destinationLocationId || null
+    if ('destination' in patch) rfqPatch.destination = patch.destination || null
+    if ('placeOfLoadingId' in patch) rfqPatch.placeOfLoadingId = patch.placeOfLoadingId || null
+    if ('placeOfLoading' in patch) rfqPatch.placeOfLoading = patch.placeOfLoading || null
+    if ('placeOfDeliveryId' in patch) rfqPatch.placeOfDeliveryId = patch.placeOfDeliveryId || null
+    if ('placeOfDelivery' in patch) rfqPatch.placeOfDelivery = patch.placeOfDelivery || null
+    if (Object.keys(rfqPatch).length === 0) return
+    if (rfqRouteSyncTimerRef.current) clearTimeout(rfqRouteSyncTimerRef.current)
+    rfqRouteSyncTimerRef.current = setTimeout(async () => {
+      await apiCall(`/api/fms_offers/rfq/${currentRfqId}`, {
+        method: 'PUT',
+        body: JSON.stringify(rfqPatch),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }, 300)
+  }, [])
+
   const updateItem = useCallback((index: number, patch: Partial<WizardItem>) => {
     setEditableItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     )
-    // Sync offer-level fields for the first item
-    if (index === 0) syncOfferFields(patch)
+    // Sync offer-level + RFQ-level fields for the first item
+    if (index === 0) {
+      syncOfferFields(patch)
+      syncRfqRouteFields(patch)
+    }
     // Auto-resolve location names → IDs
     resolveItemLocations(patch, index, mountedRef, setEditableItems)
-  }, [syncOfferFields])
+  }, [syncOfferFields, syncRfqRouteFields])
 
   const toggleEditing = useCallback((idx: number) => {
     setEditingItems((prev) => {
@@ -1116,6 +1230,8 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     setCreating(false)
     setSending(false)
     setSpecialTerms('')
+    setClientDisplayName('')
+    clientNameResolvedRef.current = null
     setEditableItems([])
     setCalculations([])
     setOfferId(null)
@@ -1164,6 +1280,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     draftOffer,
     specialTerms,
     updateSpecialTerms,
+    clientDisplayName,
 
     // UI state
     expandedBoxes,

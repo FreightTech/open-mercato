@@ -527,16 +527,12 @@ export function WizardStepPricing({
                       incoterm={item.incoterm}
                       sections={(() => {
                         const allRows = calculations[idx]?.chargeRows || []
-                        const SECTIONS: ChargesSection[] = [
-                          { sectionType: 'main_freight', label: 'MAIN FREIGHT', rows: allRows.filter((r) => r.sectionType === 'main_freight') },
+                        // Always render sections; bucket untagged legacy rows into MAIN FREIGHT
+                        return [
+                          { sectionType: 'main_freight', label: 'MAIN FREIGHT', rows: allRows.filter((r) => !r.sectionType || r.sectionType === 'main_freight') },
                           { sectionType: 'origin', label: 'ORIGIN', rows: allRows.filter((r) => r.sectionType === 'origin') },
                           { sectionType: 'destination', label: 'DESTINATION', rows: allRows.filter((r) => r.sectionType === 'destination') },
                         ]
-                        // Show sections for new offers (empty or with tagged rows), fall back to flat for legacy
-                        const hasUntaggedRows = allRows.some((r) => !r.sectionType)
-                        const hasTaggedRows = allRows.some((r) => r.sectionType)
-                        // Always show sections unless all rows are untagged legacy rows
-                        return (allRows.length === 0 || hasTaggedRows || !hasUntaggedRows) ? SECTIONS : undefined
                       })()}
                       onAddLine={(sectionType) => {
                         const newRow: ChargeRow = {

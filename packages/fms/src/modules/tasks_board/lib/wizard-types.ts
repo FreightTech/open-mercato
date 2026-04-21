@@ -123,6 +123,11 @@ export type OfferLineData = {
 export type OfferCalcData = {
   id: string
   sectionType?: string | null
+  containers?: string[] | null
+  originLocationId?: string | null
+  destinationLocationId?: string | null
+  placeOfLoadingId?: string | null
+  placeOfDeliveryId?: string | null
   lines: OfferLineData[]
 }
 
@@ -134,6 +139,10 @@ export type OfferFullData = {
   createdAt: string
   validUntil: string | null
   transportMode: string | null
+  incoterm?: string | null
+  customerNotes?: string | null
+  carrierIds?: string[] | null
+  providerIds?: string[] | null
   specialTerms: string | null
   baseCurrency?: string | null
   exchangeRates?: Array<{ fromCurrencyCode: string; toCurrencyCode: string; rate: string; date: string; source: string }> | null
