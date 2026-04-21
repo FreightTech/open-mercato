@@ -116,6 +116,20 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [initialRfqId, mode])
 
+  // Invalidate RFQ / offer caches whenever the wizard transitions from
+  // closed → open so reopening after edits shows server truth. Radix Sheet
+  // keeps this hook mounted across open/close cycles, so refetchOnMount
+  // alone is not enough — but invalidateQueries on an active observer
+  // triggers an immediate refetch.
+  const prevOpenRef = useRef(false)
+  useEffect(() => {
+    if (open && !prevOpenRef.current && rfqId) {
+      queryClient.invalidateQueries({ queryKey: ['rfq-detail', rfqId] })
+      queryClient.invalidateQueries({ queryKey: ['offer'] })
+    }
+    prevOpenRef.current = open
+  }, [open, rfqId, queryClient])
+
   // Fetch RFQ detail for existing mode — refetch on each wizard mount so
   // reopening after edits reflects server truth, but treat the fetched data
   // as stable while the wizard stays open.
