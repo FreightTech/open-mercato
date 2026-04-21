@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { InjectionWidgetComponentProps } from '@open-mercato/shared/modules/widgets/injection'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { LoadingMessage } from '@open-mercato/ui/backend/detail'
+import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 
 // ── Types ──
 
@@ -144,6 +145,7 @@ export default function KsefInvoicesWidget({ context }: InjectionWidgetComponent
   const ctx = context as IntegrationDetailContext
   const router = useRouter()
   const queryClient = useQueryClient()
+  const scopeVersion = useOrganizationScopeVersion()
 
   // Invoice list state
   const [page, setPage] = React.useState(1)
@@ -155,7 +157,6 @@ export default function KsefInvoicesWidget({ context }: InjectionWidgetComponent
   const [showFetchForm, setShowFetchForm] = React.useState(false)
   const [fetchDateFrom, setFetchDateFrom] = React.useState(getDefaultDateFrom)
   const [fetchDateTo, setFetchDateTo] = React.useState(getDefaultDateTo)
-  const [fetchSubjectType, setFetchSubjectType] = React.useState('all')
   const [fetchResult, setFetchResult] = React.useState<{ ok: boolean; message: string } | null>(null)
 
   // Company profile state
@@ -172,12 +173,12 @@ export default function KsefInvoicesWidget({ context }: InjectionWidgetComponent
   // ── Queries ──
 
   const invoicesQuery = useQuery({
-    queryKey: ['ksef', 'invoices', page, direction, search],
+    queryKey: ['ksef', 'invoices', page, direction, search, scopeVersion],
     queryFn: () => fetchInvoices({ page, limit, direction, search }),
   })
 
   const settingsQuery = useQuery({
-    queryKey: ['ksef', 'settings'],
+    queryKey: ['ksef', 'settings', scopeVersion],
     queryFn: fetchSettings,
   })
 
@@ -206,21 +207,15 @@ export default function KsefInvoicesWidget({ context }: InjectionWidgetComponent
   })
 
   const fetchMutation = useMutation({
-    mutationFn: async (params: { dateFrom: string; dateTo: string; subjectType: string }) => {
-      const types = params.subjectType === 'all' ? ['subject1', 'subject2', 'subject3'] : [params.subjectType]
-      const results = await Promise.all(
-        types.map((subjectType) =>
-          apiCall<{ message: string; nip: string }>('/api/ksef/sync-received', {
-            method: 'POST',
-            body: JSON.stringify({ dateFrom: params.dateFrom || undefined, dateTo: params.dateTo || undefined, subjectType }),
-          })
-        )
-      )
-      if (!results.some((r) => r.ok)) throw new Error('Failed to start sync')
-      return types.length
+    mutationFn: async (params: { dateFrom: string; dateTo: string }) => {
+      const result = await apiCall<{ message: string; nip: string }>('/api/ksef/sync-received', {
+        method: 'POST',
+        body: JSON.stringify({ dateFrom: params.dateFrom || undefined, dateTo: params.dateTo || undefined }),
+      })
+      if (!result.ok) throw new Error('Failed to start sync')
     },
-    onSuccess: (typeCount) => {
-      setFetchResult({ ok: true, message: `Sync started for ${typeCount === 1 ? '1 type' : 'all types'}` })
+    onSuccess: () => {
+      setFetchResult({ ok: true, message: 'Sync started' })
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['ksef', 'invoices'] })
         queryClient.invalidateQueries({ queryKey: ['ksef', 'settings'] })
@@ -526,17 +521,7 @@ export default function KsefInvoicesWidget({ context }: InjectionWidgetComponent
         {/* Manual fetch form — collapsible */}
         {showFetchForm && (
           <div className="rounded-lg border bg-card p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">Type</label>
-                <select value={fetchSubjectType} onChange={(e) => setFetchSubjectType(e.target.value)}
-                  className="w-full rounded-md border px-3 py-1.5 text-sm bg-background">
-                  <option value="all">All</option>
-                  <option value="subject2">Incoming</option>
-                  <option value="subject1">Outgoing</option>
-                  <option value="subject3">Other</option>
-                </select>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1">From</label>
                 <input type="date" value={fetchDateFrom} onChange={(e) => setFetchDateFrom(e.target.value)}
@@ -549,7 +534,7 @@ export default function KsefInvoicesWidget({ context }: InjectionWidgetComponent
               </div>
               <div className="flex items-end">
                 <button type="button" disabled={fetchMutation.isPending}
-                  onClick={() => fetchMutation.mutate({ dateFrom: fetchDateFrom, dateTo: fetchDateTo, subjectType: fetchSubjectType })}
+                  onClick={() => fetchMutation.mutate({ dateFrom: fetchDateFrom, dateTo: fetchDateTo })}
                   className="w-full rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
                   {fetchMutation.isPending ? 'Starting…' : 'Fetch invoices'}
                 </button>

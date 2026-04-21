@@ -4,6 +4,7 @@ import * as React from 'react'
 import type { InjectionWidgetComponentProps } from '@open-mercato/shared/modules/widgets/injection'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { LoadingMessage } from '@open-mercato/ui/backend/detail'
+import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 
 interface CompanyProfile {
   nip: string
@@ -54,6 +55,7 @@ function filterPrimitiveCredentials(input: Record<string, unknown>): CredentialV
 }
 
 export default function KsefCredentialsWidget(_props: InjectionWidgetComponentProps) {
+  const scopeVersion = useOrganizationScopeVersion()
   const [loading, setLoading] = React.useState(true)
   const [credentials, setCredentials] = React.useState<CredentialValues>({})
   const [company, setCompany] = React.useState<CompanyProfile | null>(null)
@@ -76,6 +78,11 @@ export default function KsefCredentialsWidget(_props: InjectionWidgetComponentPr
   const hasCredentials = Boolean(credentials.nip)
 
   React.useEffect(() => {
+    setLoading(true)
+    setCredentials({})
+    setCompany(null)
+    setFormValues({ nip: '', authType: 'token', ksefToken: '', certificatePem: '', privateKeyPem: '', environment: 'test' })
+    setEditing(false)
     async function load() {
       const [credResult, companyResult] = await Promise.all([
         apiCall<{ credentials: CredentialValues }>('/api/integrations/ksef/credentials'),
@@ -95,7 +102,7 @@ export default function KsefCredentialsWidget(_props: InjectionWidgetComponentPr
       setLoading(false)
     }
     load()
-  }, [])
+  }, [scopeVersion])
 
   React.useEffect(() => {
     if (!hasCredentials) {

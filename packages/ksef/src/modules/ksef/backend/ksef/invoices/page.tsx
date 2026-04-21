@@ -55,7 +55,6 @@ export default function KsefInvoicesPage() {
   const [fetchModalOpen, setFetchModalOpen] = React.useState(false)
   const [fetchDateFrom, setFetchDateFrom] = React.useState(getDefaultDateFrom)
   const [fetchDateTo, setFetchDateTo] = React.useState(getDefaultDateTo)
-  const [fetchSubjectType, setFetchSubjectType] = React.useState<string>('subject2')
   const [fetchLoading, setFetchLoading] = React.useState(false)
   const [fetchResult, setFetchResult] = React.useState<{ ok: boolean; message: string } | null>(null)
 
@@ -87,7 +86,6 @@ export default function KsefInvoicesPage() {
       body: JSON.stringify({
         dateFrom: fetchDateFrom || undefined,
         dateTo: fetchDateTo || undefined,
-        subjectType: fetchSubjectType,
       }),
     })
     setFetchLoading(false)
@@ -152,18 +150,6 @@ export default function KsefInvoicesPage() {
             </div>
 
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Invoice type</label>
-                <select
-                  value={fetchSubjectType}
-                  onChange={(e) => setFetchSubjectType(e.target.value)}
-                  className="w-full rounded-md border px-3 py-1.5 text-sm bg-background"
-                >
-                  <option value="subject2">Incoming (received)</option>
-                  <option value="subject1">Outgoing (issued)</option>
-                  <option value="subject3">Other</option>
-                </select>
-              </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Date from</label>
                 <input

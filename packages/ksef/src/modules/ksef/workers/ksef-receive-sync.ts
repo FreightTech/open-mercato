@@ -17,6 +17,7 @@ import {
 } from '../lib/xml-parser'
 import { emitKsefEvent } from '../events'
 import { ksefFetchWithRetry } from '../lib/rate-limit'
+import { ksefLogger as logger } from '../lib/observability'
 import type { KsefAuthService } from '../services/auth.service'
 
 export const RECEIVE_SYNC_QUEUE_NAME = 'ksef-receive-sync'
@@ -33,7 +34,22 @@ export type ReceiveSyncPayload = {
   nip?: string
   dateFrom?: string
   dateTo?: string
+  /** @deprecated Use `subjectTypes` array instead. Kept for backward compat with queued jobs. */
   subjectType?: string
+  subjectTypes?: string[]
+}
+
+const ALL_SUBJECT_TYPES = ['subject1', 'subject2', 'subject3']
+
+function toPascalSubjectType(st: string): string {
+  if (st === 'subject1') return 'Subject1'
+  if (st === 'subject2') return 'Subject2'
+  if (st === 'subject3') return 'Subject3'
+  return st
+}
+
+function directionForSubjectType(st: string): 'outgoing' | 'incoming' {
+  return st === 'subject1' ? 'outgoing' : 'incoming'
 }
 
 type HandlerContext = { resolve: <T = unknown>(name: string) => T }
@@ -43,12 +59,17 @@ export default async function handle(
   ctx: JobContext & HandlerContext
 ): Promise<void> {
   const em = ctx.resolve<EntityManager>('em')
-  const { tenantId, organizationId, dateFrom, dateTo, subjectType } = job.payload
+  const { tenantId, organizationId, dateFrom, dateTo } = job.payload
+
+  // Backward compat: old jobs may have singular `subjectType`
+  const subjectTypes = job.payload.subjectTypes
+    ?? (job.payload.subjectType ? [job.payload.subjectType] : ALL_SUBJECT_TYPES)
 
   const { createIntegrationLogService } = await import('@open-mercato/core/modules/integrations/lib/log-service')
   const log = createIntegrationLogService(em).scoped('ksef', { tenantId, organizationId })
 
-  await log.info('Receive sync job started', { dateFrom, dateTo, subjectType })
+  await log.info('Receive sync job started', { dateFrom, dateTo, subjectTypes })
+  logger.info('ksef.receive_sync.started', { tenantId, organizationId, dateFrom, dateTo, subjectTypes })
 
   try {
     // Load KSeF credentials from Integration Marketplace
@@ -58,6 +79,7 @@ export default async function handle(
 
     if (!credentials) {
       await log.error('KSeF credentials not configured')
+      logger.error('ksef.receive_sync.credentials_missing', { tenantId, organizationId })
       throw new Error('KSeF credentials not configured')
     }
 
@@ -65,11 +87,13 @@ export default async function handle(
     const nip = job.payload.nip ?? (credentials.nip as string)
     if (!nip) {
       await log.error('NIP not available in credentials')
+      logger.error('ksef.receive_sync.nip_missing', { tenantId, organizationId })
       throw new Error('NIP not available — configure it in KSeF integration credentials')
     }
 
     const environment = (credentials.environment as string) ?? 'test'
     await log.info(`Authenticating with KSeF ${environment} environment`, { nip, authType: credentials.authType as string })
+    logger.info('ksef.receive_sync.authenticating', { tenantId, organizationId, nip, environment, authType: credentials.authType })
 
     const authService = ctx.resolve<KsefAuthService>('ksefAuthService')
     const authResult = await authService.authenticate(em, {
@@ -87,6 +111,7 @@ export default async function handle(
     const accessToken = authResult.accessToken
 
     await log.info('KSeF authentication successful')
+    logger.info('ksef.receive_sync.authenticated', { tenantId, organizationId, nip, environment })
 
     try {
       const now = new Date()
@@ -98,86 +123,92 @@ export default async function handle(
         ? new Date(dateTo + 'T23:59:59').toISOString()
         : now.toISOString()
 
-      const resolvedSubjectType = subjectType ?? 'subject2'
-      const pascalSubjectType = resolvedSubjectType === 'subject1' ? 'Subject1'
-        : resolvedSubjectType === 'subject2' ? 'Subject2'
-        : resolvedSubjectType === 'subject3' ? 'Subject3'
-        : resolvedSubjectType
-
-      const requestBody = {
-        subjectType: pascalSubjectType,
-        dateRange: {
-          dateType: 'Invoicing',
-          from: queryDateFrom,
-          to: queryDateTo,
-        },
-      }
-
-      await log.info('Querying KSeF for invoices', { subjectType: subjectType ?? 'subject2', dateFrom: queryDateFrom, dateTo: queryDateTo })
-
       const queryUrl = getQueryInvoicesUrl(environment as 'test' | 'demo' | 'production')
-      const invoiceDirection = subjectType === 'subject1' ? 'outgoing' : 'incoming'
-      let imported = 0
-      let skipped = 0
+      let totalImported = 0
+      let totalSkipped = 0
       let totalFound = 0
-      let pageNumber = 0
-      let hasMore = true
 
-      while (hasMore) {
-        const pageBody = {
-          ...requestBody,
-          pageSize: 100,
-          ...(pageNumber > 0 ? { pageOffset: pageNumber } : {}),
-        }
+      for (const subjectType of subjectTypes) {
+        const invoiceDirection = directionForSubjectType(subjectType)
+        await log.info(`Querying KSeF for ${invoiceDirection} invoices (${subjectType})`, { subjectType, dateFrom: queryDateFrom, dateTo: queryDateTo })
+        logger.info('ksef.receive_sync.querying', { tenantId, organizationId, subjectType, dateFrom: queryDateFrom, dateTo: queryDateTo })
 
-        const queryResponse = await ksefFetchWithRetry(
-          queryUrl,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${accessToken}`,
+        let imported = 0
+        let skipped = 0
+        let found = 0
+        let pageNumber = 0
+        let hasMore = true
+
+        while (hasMore) {
+          const requestBody = {
+            subjectType: toPascalSubjectType(subjectType),
+            dateRange: {
+              dateType: 'Invoicing',
+              from: queryDateFrom,
+              to: queryDateTo,
             },
-            body: JSON.stringify(pageBody),
-          },
-          {
-            onRetry: async (attempt, waitMs) => {
-              await log.info(`Rate limited by KSeF, waiting ${Math.ceil(waitMs / 1000)}s before retry (attempt ${attempt + 1})`, { attempt, waitMs })
+          }
+
+          const paginatedUrl = `${queryUrl}?pageSize=100&pageOffset=${pageNumber}`
+          const queryResponse = await ksefFetchWithRetry(
+            paginatedUrl,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify(requestBody),
             },
-          },
-        )
-
-        if (!queryResponse.ok) {
-          const errorBody = await queryResponse.text()
-          await log.error(`KSeF query failed (${queryResponse.status})`, { responseBody: errorBody, page: pageNumber })
-          throw new Error(`KSeF query failed (${queryResponse.status}): ${errorBody}`)
-        }
-
-        const queryResult = (await queryResponse.json()) as Record<string, unknown>
-        const invoiceHeaders = (queryResult.invoices ?? queryResult.invoiceHeaderList ?? []) as KsefInvoiceHeader[]
-        hasMore = queryResult.hasMore === true
-
-        totalFound += invoiceHeaders.length
-        await log.info(`Page ${pageNumber + 1}: found ${invoiceHeaders.length} invoice(s)${hasMore ? ', fetching next page...' : ''}`)
-
-        for (const header of invoiceHeaders) {
-          const wasImported = await importReceivedInvoice(
-            em,
-            header,
-            accessToken,
-            environment as 'test' | 'demo' | 'production',
-            tenantId,
-            organizationId,
-            invoiceDirection
+            {
+              onRetry: async (attempt, waitMs) => {
+                await log.info(`Rate limited by KSeF, waiting ${Math.ceil(waitMs / 1000)}s before retry (attempt ${attempt + 1})`, { attempt, waitMs })
+                logger.warn('ksef.receive_sync.rate_limited', { tenantId, organizationId, attempt: attempt + 1, waitMs })
+              },
+            },
           )
-          if (wasImported) imported++
-          else skipped++
+
+          if (!queryResponse.ok) {
+            const errorBody = await queryResponse.text()
+            await log.error(`KSeF query failed (${queryResponse.status})`, { responseBody: errorBody, subjectType, page: pageNumber })
+            logger.error('ksef.receive_sync.query_failed', { tenantId, organizationId, statusCode: queryResponse.status, subjectType, page: pageNumber })
+            throw new Error(`KSeF query failed (${queryResponse.status}): ${errorBody}`)
+          }
+
+          const queryResult = (await queryResponse.json()) as Record<string, unknown>
+          const invoiceHeaders = (queryResult.invoices ?? queryResult.invoiceHeaderList ?? []) as KsefInvoiceHeader[]
+          hasMore = queryResult.hasMore === true
+
+          found += invoiceHeaders.length
+          await log.info(`${subjectType} page ${pageNumber + 1}: found ${invoiceHeaders.length} invoice(s)${hasMore ? ', fetching next page...' : ''}`)
+          logger.info('ksef.receive_sync.page_fetched', { tenantId, organizationId, subjectType, page: pageNumber + 1, count: invoiceHeaders.length, hasMore })
+
+          for (const header of invoiceHeaders) {
+            const wasImported = await importReceivedInvoice(
+              em,
+              header,
+              accessToken,
+              environment as 'test' | 'demo' | 'production',
+              tenantId,
+              organizationId,
+              invoiceDirection
+            )
+            if (wasImported) imported++
+            else skipped++
+          }
+
+          pageNumber++
         }
 
-        pageNumber++
+        totalImported += imported
+        totalSkipped += skipped
+        totalFound += found
+        await log.info(`${subjectType} sync done: ${imported} imported, ${skipped} skipped`, { subjectType, imported, skipped, found })
+        logger.info('ksef.receive_sync.type_completed', { tenantId, organizationId, subjectType, imported, skipped, found })
       }
 
-      await log.info(`Receive sync completed: ${imported} imported, ${skipped} skipped (duplicates)`, { imported, skipped, total: totalFound, pages: pageNumber })
+      await log.info(`Receive sync completed: ${totalImported} imported, ${totalSkipped} skipped (duplicates)`, { imported: totalImported, skipped: totalSkipped, total: totalFound, subjectTypes })
+      logger.info('ksef.receive_sync.completed', { tenantId, organizationId, imported: totalImported, skipped: totalSkipped, total: totalFound, subjectTypes })
 
       // Update lastSyncAt in settings
       try {
@@ -207,6 +238,7 @@ export default async function handle(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     await log.error(`Receive sync failed: ${message}`).catch(() => {})
+    logger.error('ksef.receive_sync.failed', { tenantId, organizationId, error: message })
     throw err
   }
 }

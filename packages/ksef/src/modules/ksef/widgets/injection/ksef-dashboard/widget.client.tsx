@@ -4,6 +4,7 @@ import * as React from 'react'
 import type { InjectionWidgetComponentProps } from '@open-mercato/shared/modules/widgets/injection'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { LoadingMessage } from '@open-mercato/ui/backend/detail'
+import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 
 // ── Types ──
 
@@ -57,6 +58,7 @@ const healthStyles: Record<string, string> = {
 
 export default function KsefDashboardWidget({ context }: InjectionWidgetComponentProps) {
   const ctx = context as IntegrationDetailContext
+  const scopeVersion = useOrganizationScopeVersion()
   const [loading, setLoading] = React.useState(true)
 
   // Company & credentials
@@ -88,6 +90,12 @@ export default function KsefDashboardWidget({ context }: InjectionWidgetComponen
   const hasCredentials = Boolean(credentials.nip)
 
   React.useEffect(() => {
+    setLoading(true)
+    setCredentials({})
+    setCompany(null)
+    setFormValues({ nip: '', authType: 'token', ksefToken: '', certificatePem: '', privateKeyPem: '', environment: 'test' })
+    setEditingCredentials(false)
+    setTotalInvoices(0)
     async function load() {
       const [credResult, companyResult, invoicesResult] = await Promise.all([
         apiCall<{ credentials: CredentialValues }>('/api/integrations/ksef/credentials'),
@@ -108,7 +116,7 @@ export default function KsefDashboardWidget({ context }: InjectionWidgetComponen
       setLoading(false)
     }
     load()
-  }, [])
+  }, [scopeVersion])
 
   React.useEffect(() => {
     if (!loading && !hasCredentials) setEditingCredentials(true)

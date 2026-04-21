@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       nip: string
       dateFrom?: string
       dateTo?: string
-      subjectType?: string
+      subjectTypes?: string[]
     }>('ksef-receive-sync', queueStrategy, {
       connection: queueStrategy === 'async' ? { url: getRedisUrl('QUEUE') } : undefined,
     })
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       nip,
       dateFrom: parsed.data.dateFrom,
       dateTo: parsed.data.dateTo,
-      subjectType: parsed.data.subjectType,
+      subjectTypes: parsed.data.subjectTypes,
     })
 
     return NextResponse.json({
