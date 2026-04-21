@@ -21,6 +21,7 @@ import {
   resolveItemLocations,
   createCalculationForItem,
   resolveClientDisplayName,
+  saveItemFieldsToServer,
 } from './wizard-utils'
 
 type UseRfqWizardStateInput = {
@@ -664,8 +665,13 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     await ensureDraftOffer()
     await flushChargeSync()
 
-    // Clean up orphaned server lines that are no longer in client state
+    // Persist item-level fields (origin/destination/POL/POD IDs, carriers, incoterm, transport mode)
     const oid = offerIdRef.current
+    if (oid) {
+      await saveItemFieldsToServer(oid, editableItemsRef.current, calculationIdsRef.current)
+    }
+
+    // Clean up orphaned server lines that are no longer in client state
     if (oid) {
       const calcs = calculationsRef.current
       const clientRowIds = new Set<string>()
@@ -717,15 +723,45 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }, 300)
   }, [])
 
+  // Debounced sync of RFQ top-level route fields (origin/destination/POL/POD — item 0 only)
+  // Keeps the task-board read path in sync so ports display via a proper location reference
+  // (ID + name) rather than a stale free-text name.
+  const rfqRouteSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const syncRfqRouteFields = useCallback((patch: Partial<WizardItem>) => {
+    const currentRfqId = rfqIdRef.current
+    if (!currentRfqId) return
+    const rfqPatch: Record<string, unknown> = {}
+    if ('originLocationId' in patch) rfqPatch.originLocationId = patch.originLocationId || null
+    if ('origin' in patch) rfqPatch.origin = patch.origin || null
+    if ('destinationLocationId' in patch) rfqPatch.destinationLocationId = patch.destinationLocationId || null
+    if ('destination' in patch) rfqPatch.destination = patch.destination || null
+    if ('placeOfLoadingId' in patch) rfqPatch.placeOfLoadingId = patch.placeOfLoadingId || null
+    if ('placeOfLoading' in patch) rfqPatch.placeOfLoading = patch.placeOfLoading || null
+    if ('placeOfDeliveryId' in patch) rfqPatch.placeOfDeliveryId = patch.placeOfDeliveryId || null
+    if ('placeOfDelivery' in patch) rfqPatch.placeOfDelivery = patch.placeOfDelivery || null
+    if (Object.keys(rfqPatch).length === 0) return
+    if (rfqRouteSyncTimerRef.current) clearTimeout(rfqRouteSyncTimerRef.current)
+    rfqRouteSyncTimerRef.current = setTimeout(async () => {
+      await apiCall(`/api/fms_offers/rfq/${currentRfqId}`, {
+        method: 'PUT',
+        body: JSON.stringify(rfqPatch),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }, 300)
+  }, [])
+
   const updateItem = useCallback((index: number, patch: Partial<WizardItem>) => {
     setEditableItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     )
-    // Sync offer-level fields for the first item
-    if (index === 0) syncOfferFields(patch)
+    // Sync offer-level + RFQ-level fields for the first item
+    if (index === 0) {
+      syncOfferFields(patch)
+      syncRfqRouteFields(patch)
+    }
     // Auto-resolve location names → IDs
     resolveItemLocations(patch, index, mountedRef, setEditableItems)
-  }, [syncOfferFields])
+  }, [syncOfferFields, syncRfqRouteFields])
 
   const toggleEditing = useCallback((idx: number) => {
     setEditingItems((prev) => {

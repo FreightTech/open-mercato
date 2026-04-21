@@ -123,7 +123,12 @@ export async function createCalculationForItem(
   return calcRes.ok && calcRes.result?.id ? calcRes.result.id : null
 }
 
-/** Resolve location names from IDs for a set of items */
+/**
+ * Resolve location names from IDs for a set of items.
+ * Populates the text fields (origin, destination, placeOfLoading, placeOfDelivery)
+ * paired with their *Id counterparts so downstream consumers that read the name
+ * field keep working after an offer is reloaded from the server.
+ */
 export async function resolveLocationNamesFromIds(
   items: WizardItem[],
   mountedRef: React.MutableRefObject<boolean>,
@@ -133,6 +138,8 @@ export async function resolveLocationNamesFromIds(
   for (const it of items) {
     if (it.originLocationId) locationIdsToResolve.add(it.originLocationId)
     if (it.destinationLocationId) locationIdsToResolve.add(it.destinationLocationId)
+    if (it.placeOfLoadingId) locationIdsToResolve.add(it.placeOfLoadingId)
+    if (it.placeOfDeliveryId) locationIdsToResolve.add(it.placeOfDeliveryId)
   }
   if (locationIdsToResolve.size === 0) return
 
@@ -146,6 +153,8 @@ export async function resolveLocationNamesFromIds(
       ...it,
       origin: (it.originLocationId && locNameMap.get(it.originLocationId)) || it.origin,
       destination: (it.destinationLocationId && locNameMap.get(it.destinationLocationId)) || it.destination,
+      placeOfLoading: (it.placeOfLoadingId && locNameMap.get(it.placeOfLoadingId)) || it.placeOfLoading,
+      placeOfDelivery: (it.placeOfDeliveryId && locNameMap.get(it.placeOfDeliveryId)) || it.placeOfDelivery,
     })))
   }
 }
