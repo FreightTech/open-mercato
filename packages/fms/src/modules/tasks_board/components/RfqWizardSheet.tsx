@@ -65,6 +65,11 @@ export function RfqWizardSheet({
           if (stateRfqId) {
             queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
             queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
+            // Invalidate the RFQ detail + per-offer caches so reopening the
+            // wizard reflects newly added / removed line items instead of
+            // showing a stale snapshot from before the close.
+            queryClient.invalidateQueries({ queryKey: ['rfq-detail', stateRfqId] })
+            queryClient.invalidateQueries({ queryKey: ['offer'] })
           }
           stateReset()
           onOpenChange(nextOpen)
