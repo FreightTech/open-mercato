@@ -65,13 +65,6 @@ export function RfqWizardSheet({
           if (stateRfqId) {
             queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
             queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
-            // Remove (not just invalidate) the RFQ detail + per-offer caches
-            // so reopening the wizard triggers a cold fetch. These queries
-            // use staleTime: Infinity, and invalidateQueries only refetches
-            // while an observer is subscribed — by the time the user
-            // reopens, the cached snapshot would otherwise be shown first.
-            queryClient.removeQueries({ queryKey: ['rfq-detail', stateRfqId] })
-            queryClient.removeQueries({ queryKey: ['offer'] })
           }
           stateReset()
           onOpenChange(nextOpen)

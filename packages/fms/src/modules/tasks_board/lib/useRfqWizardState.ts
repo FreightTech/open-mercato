@@ -116,7 +116,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [initialRfqId, mode])
 
-  // Fetch RFQ detail for existing mode — staleTime Infinity to prevent refetches while user is editing
+  // Fetch RFQ detail for existing mode — refetch on each wizard mount so
+  // reopening after edits reflects server truth, but treat the fetched data
+  // as stable while the wizard stays open.
   const { data: rfqDetail } = useQuery({
     queryKey: ['rfq-detail', rfqId],
     queryFn: async () => {
@@ -127,6 +129,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     },
     enabled: !!rfqId && open && mode === 'existing',
     staleTime: Infinity,
+    refetchOnMount: 'always',
   })
 
   // Resolve client display name from RFQ (contractor → companyName fallback)
@@ -145,7 +148,8 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     })()
   }, [rfqDetail])
 
-  // Fetch full offer details for existing RFQ
+  // Fetch full offer details for existing RFQ — same refetch-on-mount pattern
+  // as rfqDetail so added / removed line items show up when reopening.
   const offerIds = rfqDetail?.offers?.map((o) => o.id) || []
   const offerQueries = useQueries({
     queries: offerIds.map((oid) => ({
@@ -157,6 +161,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       },
       enabled: !!oid && open,
       staleTime: Infinity,
+      refetchOnMount: 'always' as const,
     })),
   })
   // Extract data from queries using stable keys to avoid infinite re-renders
