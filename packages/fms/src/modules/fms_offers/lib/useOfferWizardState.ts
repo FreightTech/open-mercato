@@ -136,10 +136,12 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       offerTabsRef.current = allTabs
       setActiveOfferTabIndex(activeIdx)
       activeOfferTabIndexRef.current = activeIdx
-      setContractorId(offer.contractorId || null)
-      // Resolve client display name with fallbacks: offer.contractorId → rfq.contractorId → rfq.companyName
+      // Use offer's contractor first; fall back to the RFQ's contractor so the wizard
+      // Client panel and PDF preview both display the same contractor consistently.
+      const effectiveContractorId = offer.contractorId || offer.rfq?.contractorId || null
+      setContractorId(effectiveContractorId)
       const clientDisplayName = await resolveClientDisplayName({
-        contractorId: offer.contractorId || offer.rfq?.contractorId || null,
+        contractorId: effectiveContractorId,
         companyName: offer.rfq?.companyName || null,
       })
       if (clientDisplayName && mountedRef.current) {
@@ -652,9 +654,10 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     if (offer.validUntil) setValidUntil(offer.validUntil)
     setSpecialTerms(offer.specialTerms || '')
     setProjects(offer.projects || [])
-    setContractorId(offer.contractorId || null)
+    const tabEffectiveContractorId = offer.contractorId || offer.rfq?.contractorId || null
+    setContractorId(tabEffectiveContractorId)
     const tabClientName = await resolveClientDisplayName({
-      contractorId: offer.contractorId || offer.rfq?.contractorId || null,
+      contractorId: tabEffectiveContractorId,
       companyName: offer.rfq?.companyName || null,
     })
     if (mountedRef.current) {
