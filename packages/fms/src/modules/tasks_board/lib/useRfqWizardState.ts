@@ -22,6 +22,8 @@ import {
   createCalculationForItem,
   resolveClientDisplayName,
   saveItemFieldsToServer,
+  resolveLocationNamesFromIds,
+  resolveCarrierProviderNames,
 } from './wizard-utils'
 
 type UseRfqWizardStateInput = {
@@ -270,17 +272,60 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     draftLinesLoadedRef.current = true
     console.log('[RfqWizard:DIAG] draftOffer loaded, id:', draftOffer.id, 'calcs:', draftOffer.calculations?.length)
     if (draftOffer.specialTerms) setSpecialTerms(draftOffer.specialTerms)
-    const calcs = draftOffer.calculations || []
-    if (calcs.length > 0) {
-      // Map each calculation's lines to the corresponding item's chargeRows
-      const hasAnyLines = calcs.some((c) => c.lines.length > 0)
+
+    // Route-level calculations (exclude section-only main_freight/origin/destination rows used for charge grouping)
+    const SECTION_TYPES = new Set(['main_freight', 'origin', 'destination'])
+    const allCalcs = draftOffer.calculations || []
+    const routeCalcs = allCalcs.filter((c) => !c.sectionType || !SECTION_TYPES.has(c.sectionType))
+
+    // Hydrate editable items with persisted route info (containers, IDs, offer-level fields)
+    // Only hydrate when items either have unresolved IDs (no ID stored) or the server has data we haven't loaded.
+    if (routeCalcs.length > 0) {
+      setEditableItems((prev) => {
+        if (prev.length === 0) return prev
+        const hydrated = prev.map((item, idx) => {
+          const rc = routeCalcs[idx]
+          if (!rc) return item
+          const inheritOfferLevel = idx === 0
+          return {
+            ...item,
+            containerType: item.containerType ?? rc.containers?.[0] ?? null,
+            containerCount: item.containerCount ?? (rc.containers?.length || null),
+            originLocationId: item.originLocationId ?? rc.originLocationId ?? null,
+            destinationLocationId: item.destinationLocationId ?? rc.destinationLocationId ?? null,
+            placeOfLoadingId: item.placeOfLoadingId ?? rc.placeOfLoadingId ?? null,
+            placeOfDeliveryId: item.placeOfDeliveryId ?? rc.placeOfDeliveryId ?? null,
+            incoterm: inheritOfferLevel ? (item.incoterm ?? draftOffer.incoterm ?? null) : item.incoterm,
+            transportMode: inheritOfferLevel ? (item.transportMode ?? draftOffer.transportMode ?? null) : item.transportMode,
+            cargoDescription: inheritOfferLevel ? (item.cargoDescription ?? draftOffer.customerNotes ?? null) : item.cargoDescription,
+            carrierIds: inheritOfferLevel && (!item.carrierIds || item.carrierIds.length === 0)
+              ? (draftOffer.carrierIds ?? [])
+              : item.carrierIds,
+            providerIds: inheritOfferLevel && (!item.providerIds || item.providerIds.length === 0)
+              ? (draftOffer.providerIds ?? [])
+              : item.providerIds,
+          }
+        })
+        return hydrated
+      })
+
+      // Expand POL/POD slots so the user sees the loaded values (mirrors stored IDs)
+      const polIndexes = routeCalcs.reduce<number[]>((acc, rc, idx) => rc.placeOfLoadingId ? [...acc, idx] : acc, [])
+      const podIndexes = routeCalcs.reduce<number[]>((acc, rc, idx) => rc.placeOfDeliveryId ? [...acc, idx] : acc, [])
+      if (polIndexes.length > 0) setExpandedPol((prev) => { const n = new Set(prev); polIndexes.forEach((i) => n.add(i)); return n })
+      if (podIndexes.length > 0) setExpandedPod((prev) => { const n = new Set(prev); podIndexes.forEach((i) => n.add(i)); return n })
+    }
+
+    // Map charge rows from calculation lines to their route-indexed chargeRows buckets
+    if (allCalcs.length > 0) {
+      const hasAnyLines = allCalcs.some((c) => c.lines.length > 0)
       if (hasAnyLines) {
         setCalculations((prev) => {
           const updated = [...prev]
-          for (let i = 0; i < calcs.length; i++) {
-            if (calcs[i].lines.length > 0) {
-              const calcSectionType = (calcs[i] as any).sectionType || null
-              const rows = calcs[i].lines.map((line) => {
+          for (let i = 0; i < allCalcs.length; i++) {
+            if (allCalcs[i].lines.length > 0) {
+              const calcSectionType = (allCalcs[i] as any).sectionType || null
+              const rows = allCalcs[i].lines.map((line) => {
                 const row = offerLineToChargeRow(line)
                 if (calcSectionType && !row.sectionType) row.sectionType = calcSectionType
                 return row
@@ -294,9 +339,22 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
           }
           return updated
         })
-        return // Don't populate with default products
       }
     }
+
+    // Resolve location names and carrier/provider names for display
+    ;(async () => {
+      // Use a short microtask to let the setEditableItems above flush first
+      await Promise.resolve()
+      if (!mountedRef.current) return
+      await resolveLocationNamesFromIds(editableItemsRef.current, mountedRef, setEditableItems)
+      await resolveCarrierProviderNames(
+        draftOffer.carrierIds ?? [],
+        draftOffer.providerIds ?? [],
+        mountedRef,
+        setEditableItems,
+      )
+    })()
   }, [draftOffer])
 
   // Initialize empty calculations when items change (if not loaded from draft)
