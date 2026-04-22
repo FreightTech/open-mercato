@@ -132,7 +132,8 @@ export function OfferContextPanel({ offerId, rfqId, contractorIdProp, contractor
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contractorId: newContractorId, companyName: name ?? null }),
     })
-  }, [rfqId, isControlled, onContractorChangeProp])
+    queryClient.invalidateQueries({ queryKey: ['rfq-context', rfqId] })
+  }, [rfqId, isControlled, onContractorChangeProp, queryClient])
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections((prev) => {

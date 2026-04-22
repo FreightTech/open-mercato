@@ -167,8 +167,8 @@ export async function GET(req: Request) {
 
   if (q && q.trim().length > 0) {
     const term = `%${escapeLikePattern(q.trim())}%`
-    conditions.push(`(code ILIKE ? OR name ILIKE ?)`)
-    params.push(term, term)
+    conditions.push(`(code ILIKE ? OR name ILIKE ? OR locode ILIKE ? OR city ILIKE ?)`)
+    params.push(term, term, term, term)
   }
 
   if (type) {

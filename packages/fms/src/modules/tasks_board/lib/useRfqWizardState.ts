@@ -23,8 +23,27 @@ import {
   resolveClientDisplayName,
   saveItemFieldsToServer,
   resolveLocationNamesFromIds,
+  resolveMissingLocationIds,
   resolveCarrierProviderNames,
 } from './wizard-utils'
+
+const SECTION_TYPES = new Set(['main_freight', 'origin', 'destination'])
+
+/**
+ * Collapse server-side calculations into a per-route array.
+ * The server creates 3 section calcs (main_freight, origin, destination) per offer;
+ * routes beyond the first live on non-section "Route N" calcs. The wizard stores
+ * one slot per route, using main_freight for item 0's route writes. Line-level
+ * sectionType drives charge grouping inside each slot.
+ */
+function routeCalcsFromServer<T extends { id: string; sectionType?: string | null }>(
+  calcs: readonly T[],
+): (T | undefined)[] {
+  if (!calcs.length) return []
+  const main = calcs.find((c) => c.sectionType === 'main_freight') || calcs[0]
+  const extras = calcs.filter((c) => (!c.sectionType || !SECTION_TYPES.has(c.sectionType)) && c.id !== main?.id)
+  return [main, ...extras]
+}
 
 type UseRfqWizardStateInput = {
   mode: 'new' | 'existing'
@@ -98,7 +117,10 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [initialRfqId, mode])
 
-  // Fetch RFQ detail for existing mode — staleTime Infinity to prevent refetches while user is editing
+  // Fetch RFQ detail for existing mode. The close handler in RfqWizardSheet
+  // wipes ['rfq-detail', id] + ['offer'] caches after the wizard settles, so
+  // reopening always starts with an empty cache and refetches fresh — the
+  // one-shot init gates below are safe because they never see stale data.
   const { data: rfqDetail } = useQuery({
     queryKey: ['rfq-detail', rfqId],
     queryFn: async () => {
@@ -109,6 +131,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     },
     enabled: !!rfqId && open && mode === 'existing',
     staleTime: Infinity,
+    refetchOnMount: 'always',
   })
 
   // Resolve client display name from RFQ (contractor → companyName fallback)
@@ -127,7 +150,8 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     })()
   }, [rfqDetail])
 
-  // Fetch full offer details for existing RFQ
+  // Fetch full offer details for existing RFQ — same refetch-on-mount pattern
+  // as rfqDetail so added / removed line items show up when reopening.
   const offerIds = rfqDetail?.offers?.map((o) => o.id) || []
   const offerQueries = useQueries({
     queries: offerIds.map((oid) => ({
@@ -139,6 +163,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       },
       enabled: !!oid && open,
       staleTime: Infinity,
+      refetchOnMount: 'always' as const,
     })),
   })
   // Extract data from queries using stable keys to avoid infinite re-renders
@@ -270,21 +295,20 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     if (!draftOffer) return
     if (draftLinesLoadedRef.current) return
     draftLinesLoadedRef.current = true
-    console.log('[RfqWizard:DIAG] draftOffer loaded, id:', draftOffer.id, 'calcs:', draftOffer.calculations?.length)
     if (draftOffer.specialTerms) setSpecialTerms(draftOffer.specialTerms)
 
-    // Route-level calculations (exclude section-only main_freight/origin/destination rows used for charge grouping)
-    const SECTION_TYPES = new Set(['main_freight', 'origin', 'destination'])
+    // Calculations per route. The server persists route data on the main_freight
+    // calc for item 0 and on non-section calcs for items 1+, mirroring the shape
+    // used by the fms_offers wizard.
     const allCalcs = draftOffer.calculations || []
-    const routeCalcs = allCalcs.filter((c) => !c.sectionType || !SECTION_TYPES.has(c.sectionType))
+    const routeCalcByIndex = routeCalcsFromServer(allCalcs)
 
     // Hydrate editable items with persisted route info (containers, IDs, offer-level fields)
-    // Only hydrate when items either have unresolved IDs (no ID stored) or the server has data we haven't loaded.
-    if (routeCalcs.length > 0) {
+    if (routeCalcByIndex.some(Boolean)) {
       setEditableItems((prev) => {
         if (prev.length === 0) return prev
         const hydrated = prev.map((item, idx) => {
-          const rc = routeCalcs[idx]
+          const rc = routeCalcByIndex[idx]
           if (!rc) return item
           const inheritOfferLevel = idx === 0
           return {
@@ -310,36 +334,36 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       })
 
       // Expand POL/POD slots so the user sees the loaded values (mirrors stored IDs)
-      const polIndexes = routeCalcs.reduce<number[]>((acc, rc, idx) => rc.placeOfLoadingId ? [...acc, idx] : acc, [])
-      const podIndexes = routeCalcs.reduce<number[]>((acc, rc, idx) => rc.placeOfDeliveryId ? [...acc, idx] : acc, [])
+      const polIndexes = routeCalcByIndex.reduce<number[]>((acc, rc, idx) => rc?.placeOfLoadingId ? [...acc, idx] : acc, [])
+      const podIndexes = routeCalcByIndex.reduce<number[]>((acc, rc, idx) => rc?.placeOfDeliveryId ? [...acc, idx] : acc, [])
       if (polIndexes.length > 0) setExpandedPol((prev) => { const n = new Set(prev); polIndexes.forEach((i) => n.add(i)); return n })
       if (podIndexes.length > 0) setExpandedPod((prev) => { const n = new Set(prev); podIndexes.forEach((i) => n.add(i)); return n })
     }
 
-    // Map charge rows from calculation lines to their route-indexed chargeRows buckets
-    if (allCalcs.length > 0) {
-      const hasAnyLines = allCalcs.some((c) => c.lines.length > 0)
-      if (hasAnyLines) {
-        setCalculations((prev) => {
-          const updated = [...prev]
-          for (let i = 0; i < allCalcs.length; i++) {
-            if (allCalcs[i].lines.length > 0) {
-              const calcSectionType = (allCalcs[i] as any).sectionType || null
-              const rows = allCalcs[i].lines.map((line) => {
-                const row = offerLineToChargeRow(line)
-                if (calcSectionType && !row.sectionType) row.sectionType = calcSectionType
-                return row
-              })
-              if (i < updated.length) {
-                updated[i] = { chargeRows: rows }
-              } else {
-                updated.push({ chargeRows: rows })
-              }
-            }
+    // Map charge rows from the route calcs only. The server stores all lines for
+    // a given route on its route calc (main_freight for item 0, non-section calcs
+    // for items 1+); line-level sectionType drives the UI grouping. The "origin"
+    // and "destination" section calcs exist as legacy buckets and are usually empty.
+    if (routeCalcByIndex.some((c) => c && c.lines.length > 0)) {
+      setCalculations((prev) => {
+        const updated = [...prev]
+        for (let i = 0; i < routeCalcByIndex.length; i++) {
+          const rc = routeCalcByIndex[i]
+          if (!rc || rc.lines.length === 0) continue
+          const calcSectionType = (rc as any).sectionType || null
+          const rows = rc.lines.map((line) => {
+            const row = offerLineToChargeRow(line)
+            if (calcSectionType && !row.sectionType) row.sectionType = calcSectionType
+            return row
+          })
+          if (i < updated.length) {
+            updated[i] = { chargeRows: rows }
+          } else {
+            updated.push({ chargeRows: rows })
           }
-          return updated
-        })
-      }
+        }
+        return updated
+      })
     }
 
     // Resolve location names and carrier/provider names for display
@@ -348,6 +372,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       await Promise.resolve()
       if (!mountedRef.current) return
       await resolveLocationNamesFromIds(editableItemsRef.current, mountedRef, setEditableItems)
+      await resolveMissingLocationIds(
+        editableItemsRef.current,
+        calculationIdsRef.current,
+        mountedRef,
+        setEditableItems,
+      )
       await resolveCarrierProviderNames(
         draftOffer.carrierIds ?? [],
         draftOffer.providerIds ?? [],
@@ -618,13 +648,15 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       setOfferTabs((prev) => prev.length === 0 ? [firstTab] : prev)
       if (offerTabsRef.current.length === 0) offerTabsRef.current = [firstTab]
 
+      // The server persists route data on the main_freight calc for item 0 and on
+      // non-section calcs for items 1+. Mirror that layout so saveItemFieldsToServer
+      // writes to the same calcs that the hydration reads from on reload.
       const calcs = draftOfferRef.current.calculations || []
-      const existingCalcIds = calcs.map((c) => c.id)
+      const newCalcIds: string[] = routeCalcsFromServer(calcs).filter((c): c is NonNullable<typeof c> => !!c).map((c) => c.id)
 
       // Create missing calculations for items beyond what the draft has
       const items = editableItemsRef.current
-      const newCalcIds = [...existingCalcIds]
-      for (let i = calcs.length; i < items.length; i++) {
+      for (let i = newCalcIds.length; i < items.length; i++) {
         const calcId = await createCalculationForItem(draftOfferRef.current.id, i, items[i])
         if (calcId) newCalcIds.push(calcId)
       }
@@ -644,7 +676,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       if (!groupIdRef.current) {
         groupIdRef.current = crypto.randomUUID()
       }
-      const offerRes = await apiCall<{ id: string; offerNumber?: string; calculations?: Array<{ id: string }> }>('/api/fms_offers/offers', {
+      const offerRes = await apiCall<{ id: string; offerNumber?: string; calculations?: Array<{ id: string; sectionType?: string | null; calculationNumber?: number }> }>('/api/fms_offers/offers', {
         method: 'POST',
         body: JSON.stringify({
           rfqId: rfqIdRef.current,
@@ -672,9 +704,15 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         setOfferTabs((prev) => prev.length === 0 ? [firstTab] : prev)
         if (offerTabsRef.current.length === 0) offerTabsRef.current = [firstTab]
 
+        // Server creates 3 section-based calculations per new offer (main_freight,
+        // origin, destination). Use main_freight for item 0 route writes; line-level
+        // sectionType drives charge grouping.
+        const serverCalcs = (offer.calculations || []).sort(
+          (a, b) => (a.calculationNumber ?? 0) - (b.calculationNumber ?? 0),
+        )
+        const mainCalcId = serverCalcs.find((c) => c.sectionType === 'main_freight')?.id || serverCalcs[0]?.id
         const newCalcIds: string[] = []
-        const firstCalcId = offer.calculations?.[0]?.id
-        if (firstCalcId) newCalcIds.push(firstCalcId)
+        if (mainCalcId) newCalcIds.push(mainCalcId)
 
         // Create additional calculations for extra routes
         const items = editableItemsRef.current
@@ -1099,7 +1137,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     setOfferId(newOffer.id)
     offerIdRef.current = newOffer.id
     setOfferNumber(newOffer.offerNumber || null)
-    const calcIds = newOffer.calculations?.map((c) => c.id) || []
+    const calcIds = routeCalcsFromServer(newOffer.calculations || []).filter((c): c is NonNullable<typeof c> => !!c).map((c) => c.id)
     setCalculationIds(calcIds)
     calculationIdsRef.current = calcIds
     // Clear per-offer tracking state and charge rows for new offer
@@ -1147,13 +1185,16 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         setOfferNumber(activeTab.offerNumber)
         const res = await apiCall<OfferFullData>(`/api/fms_offers/offers/${activeTab.offerId}`)
         if (res.ok && res.result) {
-          const calcs = (res.result.calculations || []).filter((c: any) => !(c as any).deletedAt)
-          setCalculationIds(calcs.map((c) => c.id))
-          calculationIdsRef.current = calcs.map((c) => c.id)
-          setCalculations(calcs.map((c) => ({
-            chargeRows: c.lines.filter((l: any) => !(l as any).deletedAt).map((line) => {
+          const activeCalcs = (res.result.calculations || []).filter((c: any) => !(c as any).deletedAt)
+          const routeCalcByIdx = routeCalcsFromServer(activeCalcs)
+          const ids = routeCalcByIdx.filter((c): c is NonNullable<typeof c> => !!c).map((c) => c.id)
+          setCalculationIds(ids)
+          calculationIdsRef.current = ids
+          setCalculations(routeCalcByIdx.map((c) => ({
+            chargeRows: (c?.lines || []).filter((l: any) => !(l as any).deletedAt).map((line) => {
               const row = offerLineToChargeRow(line)
-              if ((c as any).sectionType && !row.sectionType) row.sectionType = (c as any).sectionType
+              const sect = (c as any)?.sectionType
+              if (sect && !row.sectionType) row.sectionType = sect
               return row
             }),
           })))
@@ -1195,22 +1236,27 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     // Restore offer-level fields
     if (offer.specialTerms != null) setSpecialTerms(offer.specialTerms)
 
-    // Filter out soft-deleted calculations and lines
-    const calcs = (offer.calculations || []).filter((c: any) => !(c as any).deletedAt)
-    const calcIds = calcs.map((c) => c.id)
+    // Collapse the offer's section/route calcs into one slot per route
+    const activeCalcs = (offer.calculations || []).filter((c: any) => !(c as any).deletedAt)
+    const routeCalcByIdx = routeCalcsFromServer(activeCalcs)
+    const calcIds = routeCalcByIdx.filter((c): c is NonNullable<typeof c> => !!c).map((c) => c.id)
     setCalculationIds(calcIds)
     calculationIdsRef.current = calcIds
 
-    // Load charge rows from the selected offer
-    const newCalculations = calcs.map((c) => ({
-      chargeRows: c.lines.filter((line: any) => !(line as any).deletedAt).length > 0
-        ? c.lines.filter((line: any) => !(line as any).deletedAt).map((line) => {
-            const row = offerLineToChargeRow(line)
-            if ((c as any).sectionType && !row.sectionType) row.sectionType = (c as any).sectionType
-            return row
-          })
-        : [],
-    }))
+    // Load charge rows per route
+    const newCalculations = routeCalcByIdx.map((c) => {
+      if (!c) return { chargeRows: [] }
+      const liveLines = c.lines.filter((line: any) => !(line as any).deletedAt)
+      if (liveLines.length === 0) return { chargeRows: [] }
+      const calcSectionType = (c as any).sectionType || null
+      return {
+        chargeRows: liveLines.map((line) => {
+          const row = offerLineToChargeRow(line)
+          if (calcSectionType && !row.sectionType) row.sectionType = calcSectionType
+          return row
+        }),
+      }
+    })
     // Ensure we have at least as many calculation slots as editable items
     while (newCalculations.length < editableItemsRef.current.length) {
       newCalculations.push({ chargeRows: [] })

@@ -124,6 +124,63 @@ export async function createCalculationForItem(
 }
 
 /**
+ * Resolve missing location IDs from text (e.g. "Gdansk (PLGDN)") for legacy items
+ * that only have origin/destination strings. Writes resolved IDs back to the
+ * calculation row on the server so the fix persists and future loads skip this path.
+ */
+export async function resolveMissingLocationIds(
+  items: WizardItem[],
+  calculationIds: string[],
+  mountedRef: React.MutableRefObject<boolean>,
+  setEditableItems: React.Dispatch<React.SetStateAction<WizardItem[]>>,
+): Promise<void> {
+  const patches: Array<{ index: number; calcId: string; update: Partial<WizardItem> }> = []
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const calcId = calculationIds[i]
+    if (!calcId) continue
+    const needsOrigin = !!item.origin && !item.originLocationId
+    const needsDest = !!item.destination && !item.destinationLocationId
+    if (!needsOrigin && !needsDest) continue
+
+    const update: Partial<WizardItem> = {}
+    if (needsOrigin) {
+      const loc = await resolveLocation(item.origin!)
+      if (loc) { update.originLocationId = loc.id; update.origin = loc.name }
+    }
+    if (needsDest) {
+      const loc = await resolveLocation(item.destination!)
+      if (loc) { update.destinationLocationId = loc.id; update.destination = loc.name }
+    }
+    if (Object.keys(update).length > 0) patches.push({ index: i, calcId, update })
+  }
+
+  if (patches.length === 0) return
+
+  if (mountedRef.current) {
+    setEditableItems((prev) => {
+      const next = [...prev]
+      for (const p of patches) {
+        if (next[p.index]) next[p.index] = { ...next[p.index], ...p.update }
+      }
+      return next
+    })
+  }
+
+  for (const p of patches) {
+    await apiCall(`/api/fms_offers/calculations/${p.calcId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        originLocationId: p.update.originLocationId,
+        destinationLocationId: p.update.destinationLocationId,
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+}
+
+/**
  * Resolve location names from IDs for a set of items.
  * Populates the text fields (origin, destination, placeOfLoading, placeOfDelivery)
  * paired with their *Id counterparts so downstream consumers that read the name
