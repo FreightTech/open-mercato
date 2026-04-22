@@ -13,13 +13,10 @@ import { EmailSettingsTab } from './EmailSettingsTab'
 import { PdfSettingsTab } from './PdfSettingsTab'
 import {
   type SharedBrandSettings,
-  type BrandDefaults,
   type EmailSpecificSettings,
   DEFAULT_BRAND_SETTINGS,
   DEFAULT_EMAIL_SETTINGS,
   syncBrandSettingsToAll,
-  hasBrandCustomizations,
-  applyBrandDefaults,
 } from '../lib/shared-brand-settings'
 import type { TemplateType } from '../lib/template-fields'
 
@@ -45,7 +42,6 @@ export function UnifiedTemplateSettings() {
 
   // Settings state
   const [brandSettings, setBrandSettings] = React.useState<SharedBrandSettings>(DEFAULT_BRAND_SETTINGS)
-  const [brandDefaults, setBrandDefaults] = React.useState<BrandDefaults | null>(null)
   const [emailSettings, setEmailSettings] = React.useState<EmailSpecificSettings>(DEFAULT_EMAIL_SETTINGS)
   const [emailTemplates, setEmailTemplates] = React.useState<EmailTemplate[]>([])
 
@@ -67,7 +63,6 @@ export function UnifiedTemplateSettings() {
           fromName?: string | null
           fromEmail?: string | null
           replyToEmail?: string | null
-          brandDefaults?: BrandDefaults | null
         }>('/api/email_templates/settings'),
         apiCall<{
           templates: Record<string, EmailTemplate>
@@ -78,24 +73,12 @@ export function UnifiedTemplateSettings() {
       const emailData = emailRes.ok ? emailRes.result : null
       const templatesData = templatesRes.ok ? templatesRes.result : null
 
-      // Extract brand defaults
-      const defaults = emailData?.brandDefaults ?? null
-      setBrandDefaults(defaults)
-
-      // Extract brand settings from email (source of truth)
-      const loadedBrand: SharedBrandSettings = {
+      setBrandSettings({
         companyName: emailData?.companyName ?? null,
         companyLogoUrl: emailData?.companyLogoUrl ?? null,
         primaryColor: emailData?.primaryColor ?? '#1a365d',
         accentColor: emailData?.accentColor ?? '#f7fafc',
-      }
-
-      // Auto-populate from brand defaults if no customizations
-      if (!hasBrandCustomizations(loadedBrand) && defaults) {
-        setBrandSettings(applyBrandDefaults(loadedBrand, defaults))
-      } else {
-        setBrandSettings(loadedBrand)
-      }
+      })
 
       // Extract email-specific settings
       setEmailSettings({
@@ -158,13 +141,6 @@ export function UnifiedTemplateSettings() {
       setSaving(false)
     }
   }, [brandSettings, t])
-
-  // Apply brand defaults
-  const handleApplyBrandDefaults = React.useCallback(() => {
-    if (!brandDefaults) return
-    setBrandSettings(applyBrandDefaults(brandSettings, brandDefaults))
-    flash(t('templates.brand.defaults_applied', 'Brand defaults applied'), 'info')
-  }, [brandSettings, brandDefaults, t])
 
   // Save email settings
   const handleSaveEmail = React.useCallback(async () => {
@@ -257,11 +233,9 @@ export function UnifiedTemplateSettings() {
         <TabsContent value="brand" className="mt-6">
           <BrandSettingsTab
             settings={brandSettings}
-            brandDefaults={brandDefaults}
             saving={saving}
             onChange={setBrandSettings}
             onSave={handleSaveBrand}
-            onApplyDefaults={handleApplyBrandDefaults}
           />
         </TabsContent>
 

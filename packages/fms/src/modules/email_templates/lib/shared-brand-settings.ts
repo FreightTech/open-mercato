@@ -1,13 +1,11 @@
 /**
- * Shared brand settings types and utilities for the unified Template Settings page.
- * Brand settings are stored in the email_templates table.
+ * Shared company-branding settings for the unified Template Settings page.
+ * These per-tenant settings are stored in the email_templates table and
+ * consumed by both email and PDF template renderers.
  */
 
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
-/**
- * Shared brand fields that are saved to email settings table
- */
 export type SharedBrandSettings = {
   companyName: string | null
   companyLogoUrl: string | null
@@ -15,19 +13,6 @@ export type SharedBrandSettings = {
   accentColor: string
 }
 
-/**
- * Brand defaults loaded from the brand registry (via x-brand-id header)
- */
-export type BrandDefaults = {
-  companyName: string | null
-  companyLogoUrl: string | null // data URI
-  primaryColor: string
-  accentColor: string
-}
-
-/**
- * Email-specific settings (not shared with PDF)
- */
 export type EmailSpecificSettings = {
   contactEmail: string | null
   contactPhone: string | null
@@ -39,9 +24,6 @@ export type EmailSpecificSettings = {
   replyToEmail: string | null
 }
 
-/**
- * Default values for shared brand settings
- */
 export const DEFAULT_BRAND_SETTINGS: SharedBrandSettings = {
   companyName: null,
   companyLogoUrl: null,
@@ -49,9 +31,6 @@ export const DEFAULT_BRAND_SETTINGS: SharedBrandSettings = {
   accentColor: '#f7fafc',
 }
 
-/**
- * Default values for email-specific settings
- */
 export const DEFAULT_EMAIL_SETTINGS: EmailSpecificSettings = {
   contactEmail: null,
   contactPhone: null,
@@ -63,9 +42,6 @@ export const DEFAULT_EMAIL_SETTINGS: EmailSpecificSettings = {
   replyToEmail: null,
 }
 
-/**
- * Sync brand settings to email module.
- */
 export async function syncBrandSettingsToAll(
   settings: SharedBrandSettings
 ): Promise<{ emailOk: boolean }> {
@@ -79,12 +55,8 @@ export async function syncBrandSettingsToAll(
   }
 }
 
-/**
- * Load settings from email module.
- */
 export async function loadAllTemplateSettings(): Promise<{
   brand: SharedBrandSettings
-  brandDefaults: BrandDefaults | null
   email: EmailSpecificSettings
 }> {
   const emailRes = await apiCall<{
@@ -100,12 +72,10 @@ export async function loadAllTemplateSettings(): Promise<{
     fromName?: string | null
     fromEmail?: string | null
     replyToEmail?: string | null
-    brandDefaults?: BrandDefaults | null
   }>('/api/email_templates/settings')
 
   const emailData = emailRes.ok ? emailRes.result : null
 
-  // Extract brand settings from email (source of truth)
   const brand: SharedBrandSettings = {
     companyName: emailData?.companyName ?? null,
     companyLogoUrl: emailData?.companyLogoUrl ?? null,
@@ -113,10 +83,6 @@ export async function loadAllTemplateSettings(): Promise<{
     accentColor: emailData?.accentColor ?? '#f7fafc',
   }
 
-  // Get brand defaults
-  const brandDefaults: BrandDefaults | null = emailData?.brandDefaults ?? null
-
-  // Extract email-specific settings
   const email: EmailSpecificSettings = {
     contactEmail: emailData?.contactEmail ?? null,
     contactPhone: emailData?.contactPhone ?? null,
@@ -128,32 +94,5 @@ export async function loadAllTemplateSettings(): Promise<{
     replyToEmail: emailData?.replyToEmail ?? null,
   }
 
-  return { brand, brandDefaults, email }
-}
-
-/**
- * Check if brand settings have been customized (differ from defaults)
- */
-export function hasBrandCustomizations(settings: SharedBrandSettings): boolean {
-  return !!(
-    settings.companyName ||
-    settings.companyLogoUrl ||
-    (settings.primaryColor && settings.primaryColor !== '#1a365d') ||
-    (settings.accentColor && settings.accentColor !== '#f7fafc')
-  )
-}
-
-/**
- * Apply brand defaults to settings (merge defaults over empty fields)
- */
-export function applyBrandDefaults(
-  current: SharedBrandSettings,
-  defaults: BrandDefaults
-): SharedBrandSettings {
-  return {
-    companyName: defaults.companyName || current.companyName,
-    companyLogoUrl: defaults.companyLogoUrl || current.companyLogoUrl,
-    primaryColor: defaults.primaryColor || current.primaryColor,
-    accentColor: defaults.accentColor || current.accentColor,
-  }
+  return { brand, email }
 }

@@ -27,7 +27,6 @@ const saveFreighttechTrackingSettingsCommand: CommandHandler<
   async execute(rawInput, ctx) {
     const auth = ctx.auth
     const logCtx: TrackingLogContext = {
-      brandId: ctx.brandId,
       organizationId: auth?.orgId ?? undefined,
       tenantId: auth?.tenantId ?? undefined,
     }

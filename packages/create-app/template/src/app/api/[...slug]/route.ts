@@ -374,15 +374,13 @@ async function handleRequest(
     }
   }
 
-  try {     
+  try {
     const handlerContext: HandlerContext = { params: api.params, auth }
 
-    const brandId = req.headers.get('x-brand-id') ?? undefined
-         
     const response = await withRequestLogging(
     { method, path: pathname, tenantId: auth?.tenantId, userId: auth?.sub, organizationId: auth?.orgId },
     () => runWithLogContext(
-      { brandId },
+      {},
       () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
     ),
   )

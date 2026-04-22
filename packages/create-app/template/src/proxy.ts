@@ -7,11 +7,17 @@ import { NextResponse } from 'next/server'
 
 export function proxy(req: NextRequest) {
   const requestHeaders = new Headers(req.headers)
-  // Expose current URL path (no query) to server components via request headers
-  requestHeaders.set('x-next-url', req.nextUrl.pathname)
+  const pathname = req.nextUrl.pathname
+
+  // Expose current URL path to server components
+  requestHeaders.set('x-next-url', pathname)
+
   return NextResponse.next({ request: { headers: requestHeaders } })
 }
 
 export const config = {
-  matcher: ['/backend/:path*'],
+  matcher: [
+    // Match all paths except static files
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 }

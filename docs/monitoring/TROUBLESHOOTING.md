@@ -498,7 +498,7 @@ metric.name:"system.memory.used_mb"
 ```
 # Count unique label combinations
 metric.name:"ai.tokens.consumed"
-# Group by: tenantId, organizationId, brandId, model
+# Group by: tenantId, organizationId, model
 # If >1000 unique combinations, cardinality is high
 ```
 
@@ -517,7 +517,6 @@ metric.name:"ai.tokens.consumed"
 meter.createCounter('ai.tokens.consumed').add(1, {
   tenantId: '...',
   organizationId: '...',
-  brandId: '...',
   model: '...',
   userId: '...', // ← Remove this
   sessionId: '...', // ← Remove this
@@ -699,7 +698,6 @@ logger.info('fms.document.created', {
   category: document.category,
   tenantId: document.tenantId, // Required
   organizationId: document.organizationId, // Required
-  brandId: request.headers.get('x-brand-id') || undefined,
 })
 ```
 

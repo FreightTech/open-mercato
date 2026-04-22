@@ -59,10 +59,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'One or more offers not found' }, { status: 404 })
     }
 
-    const brandIdHeader = request.headers.get('x-brand-id')
-    const brandIdCookie = (request as any).cookies?.get('om_brand_id')?.value
-    const brandId = brandIdHeader || brandIdCookie
-
     const firstOffer = offers.find((o) => o.id === offerIds[0])!
 
     if (mode === 'separate') {
@@ -73,7 +69,6 @@ export async function GET(request: NextRequest) {
         const buf = await generateOfferPdf(id, em, {
           tenantId: auth.tenantId,
           organizationId: offer.organizationId,
-          brandId: brandId || undefined,
           userId: auth.userId || undefined,
         })
         pdfBuffers.push(buf)
@@ -91,13 +86,11 @@ export async function GET(request: NextRequest) {
       ? await generateOfferPdf(offerIds[0], em, {
           tenantId: auth.tenantId,
           organizationId: firstOffer.organizationId,
-          brandId: brandId || undefined,
           userId: auth.userId || undefined,
         })
       : await generateCombinedOfferPdf(offerIds, em, {
           tenantId: auth.tenantId,
           organizationId: firstOffer.organizationId,
-          brandId: brandId || undefined,
           userId: auth.userId || undefined,
         })
     const fileName = offerIds.length === 1

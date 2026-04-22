@@ -39,14 +39,7 @@ export interface EmailTemplateResponse {
   isActive: boolean
 }
 
-export interface EmailSettingsResponse extends EmailSettingsInput {
-  brandDefaults?: {
-    companyName?: string
-    companyLogoUrl?: string
-    primaryColor?: string
-    accentColor?: string
-  } | null
-}
+export type EmailSettingsResponse = EmailSettingsInput
 
 /**
  * Creates or updates an email template via API.

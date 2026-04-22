@@ -24,12 +24,12 @@ type RouteContext = {
   logCtx: TrackingLogContext
 }
 
-async function resolveWebhookContext(req: Request, brandId: string | null): Promise<RouteContext> {
+async function resolveWebhookContext(req: Request): Promise<RouteContext> {
   const container = await createRequestContainer()
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
 
-  const baseLogCtx: TrackingLogContext = { brandId }
+  const baseLogCtx: TrackingLogContext = {}
 
   if (!token) {
     logWarn('webhook:missing_token', {}, baseLogCtx)
@@ -43,7 +43,7 @@ async function resolveWebhookContext(req: Request, brandId: string | null): Prom
   }
 
   const { organizationId, tenantId } = decoded
-  const logCtx: TrackingLogContext = { brandId, organizationId, tenantId }
+  const logCtx: TrackingLogContext = { organizationId, tenantId }
 
   const auth = await getAuthFromRequest(req)
   if (!auth || !organizationId || !tenantId) {
@@ -64,7 +64,6 @@ async function resolveWebhookContext(req: Request, brandId: string | null): Prom
     selectedOrganizationId: organizationId,
     organizationIds: scope?.filterIds ?? (auth.orgId ? [auth.orgId] : null),
     request: req,
-    brandId,
   }
   const em = container.resolve('em') as EntityManager
 
@@ -77,14 +76,13 @@ async function resolveWebhookContext(req: Request, brandId: string | null): Prom
 }
 
 export async function POST(req: Request) {
-  const brandId = req.headers.get('x-brand-id') ?? null
   const start = performance.now()
-  const baseLogCtx: TrackingLogContext = { brandId }
+  const baseLogCtx: TrackingLogContext = {}
 
   logInfo('webhook:received', {}, baseLogCtx)
 
   try {
-    const { ctx, translate, logCtx } = await resolveWebhookContext(req, brandId)
+    const { ctx, translate, logCtx } = await resolveWebhookContext(req)
 
     const payload = await req.json().catch(() => ({}))
     const data = freighttechWebhookSchema.parse(payload)

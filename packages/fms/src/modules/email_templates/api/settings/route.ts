@@ -11,16 +11,6 @@ import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { emailSettingsUpsertSchema, type EmailSettingsUpsertInput } from '../../data/validators'
 import { loadEmailSettings } from '../../commands/email-settings'
 import { withScopedPayload } from '../utils'
-// Brand resolution — loaded dynamically to avoid cross-boundary import from app
-let getBrandById: (id: string) => Record<string, any> = () => ({})
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const brands = require('@/brands')
-  if (brands?.getBrandById) getBrandById = brands.getBrandById
-} catch {
-  // Package context — brand config unavailable, use empty defaults
-}
-import { logoPathToDataUri } from '../../lib/logo-utils'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['email_templates.settings.view'] },
@@ -39,14 +29,14 @@ async function resolveSettingsContext(req: Request): Promise<SettingsRouteContex
   const container = await createRequestContainer()
   const auth = await getAuthFromRequest(req)
   const { translate } = await resolveTranslations()
-  
+
   if (!auth || !auth.tenantId) {
     throw new CrudHttpError(401, { error: translate('email_templates.errors.unauthorized', 'Unauthorized') })
   }
 
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const organizationId = scope?.selectedId ?? auth.orgId ?? null
-  
+
   if (!organizationId) {
     throw new CrudHttpError(400, {
       error: translate('email_templates.errors.organization_required', 'Organization context is required'),
@@ -72,34 +62,6 @@ export async function GET(req: Request) {
     const { em, organizationId, tenantId } = await resolveSettingsContext(req)
     const record = await loadEmailSettings(em, { tenantId, organizationId })
 
-    // Load brand defaults from brand registry
-    // Try header first (SSR), fallback to cookie (API routes)
-    const brandIdHeader = req.headers.get('x-brand-id')
-    const cookieHeader = req.headers.get('cookie')
-    const brandIdCookie = cookieHeader
-      ?.split(';')
-      .find((c) => c.trim().startsWith('om_brand_id='))
-      ?.split('=')[1]
-      ?.trim()
-    const brandId = brandIdHeader || brandIdCookie
-    let brandDefaults = null
-
-    if (brandId) {
-      const brandConfig = getBrandById(brandId)
-
-      // Convert logo to data URI (with resizing)
-      const brandLogoDataUri = brandConfig.logo?.src
-        ? await logoPathToDataUri(brandConfig.logo.src)
-        : null
-
-      brandDefaults = {
-        companyName: brandConfig.name,
-        companyLogoUrl: brandLogoDataUri,
-        primaryColor: brandConfig.theme?.colors?.primaryHex || brandConfig.theme?.light?.primaryHex || '#1a365d',
-        accentColor: brandConfig.theme?.colors?.accentHex || brandConfig.theme?.light?.accentHex || '#f7fafc',
-      }
-    }
-    
     return NextResponse.json({
       companyName: record?.companyName ?? null,
       companyLogoUrl: record?.companyLogoUrl ?? null,
@@ -113,7 +75,6 @@ export async function GET(req: Request) {
       fromName: record?.fromName ?? null,
       fromEmail: record?.fromEmail ?? null,
       replyToEmail: record?.replyToEmail ?? null,
-      brandDefaults,
     })
   } catch (err) {
     if (err instanceof CrudHttpError) {
@@ -192,12 +153,6 @@ const settingsResponseSchema = z.object({
   fromName: z.string().nullable(),
   fromEmail: z.string().nullable(),
   replyToEmail: z.string().nullable(),
-  brandDefaults: z.object({
-    companyName: z.string().nullable(),
-    companyLogoUrl: z.string().nullable(),
-    primaryColor: z.string(),
-    accentColor: z.string(),
-  }).nullable().optional(),
 })
 
 const errorSchema = z.object({

@@ -436,7 +436,7 @@ function OfferPdfDocument({
 export async function generateOfferPdf(
   offerId: string,
   em: EntityManager,
-  options?: { tenantId?: string; organizationId?: string; brandId?: string; userId?: string }
+  options?: { tenantId?: string; organizationId?: string; userId?: string }
 ): Promise<Buffer> {
   // Fork EM with clear identity map — the caller's EM may have loaded
   // related entities (e.g. offer lines from other offers) that bleed
@@ -461,7 +461,7 @@ export async function generateOfferPdf(
     // Use template-based PDF generation when we have tenant/org context.
     // This correctly loads PdfSettings (company name, logo, colors, footer, terms)
     // and falls back to the default HTML template if no custom template is saved.
-    return generateOfferPdfFromTemplate(offer, freshEm, tenantId, organizationId, options?.brandId, options?.userId)
+    return generateOfferPdfFromTemplate(offer, freshEm, tenantId, organizationId, options?.userId)
   }
 
   // Fall back to legacy React PDF renderer when no tenant/org context
@@ -479,7 +479,7 @@ export async function generateOfferPdf(
 export async function generateCombinedOfferPdf(
   offerIds: string[],
   em: EntityManager,
-  options?: { tenantId?: string; organizationId?: string; brandId?: string; userId?: string },
+  options?: { tenantId?: string; organizationId?: string; userId?: string },
 ): Promise<Buffer> {
   // Generate individual PDFs (each is 3 pages: cover, content, terms)
   // The template always produces exactly 3 pages per offer.
@@ -502,7 +502,7 @@ export async function generateCombinedOfferPdf(
     const organizationId = options?.organizationId || offer.organizationId
 
     const buf = tenantId && organizationId
-      ? await generateOfferPdfFromTemplate(offer, freshEm, tenantId, organizationId, options?.brandId, options?.userId)
+      ? await generateOfferPdfFromTemplate(offer, freshEm, tenantId, organizationId, options?.userId)
       : await generateOfferPdfLegacy(offer, freshEm)
     pdfBuffers.push(buf)
   }
@@ -533,7 +533,6 @@ export async function generateCombinedOfferPdf(
       firstFreshEm,
       tenantId,
       organizationId,
-      options?.brandId,
       options?.userId,
       { offerNumberOverride: combinedOfferNumber, specialTermsOverride: combinedSpecialTerms },
     )
@@ -594,7 +593,6 @@ async function generateOfferPdfFromTemplate(
   em: EntityManager,
   tenantId: string,
   organizationId: string,
-  _brandId?: string,
   userId?: string,
   overrides?: { offerNumberOverride?: string; specialTermsOverride?: string },
 ): Promise<Buffer> {

@@ -1,7 +1,6 @@
 type LogPayload = Record<string, unknown>
 
 export interface TrackingLogContext {
-  brandId?: string | null
   organizationId?: string
   tenantId?: string
 }
@@ -16,7 +15,6 @@ export function getLogContext(ctx?: TrackingLogContext): LogPayload {
   return {
     module: MODULE,
     service: getServiceName(),
-    brandId: ctx?.brandId ?? null,
     organizationId: ctx?.organizationId,
     tenantId: ctx?.tenantId,
   }

@@ -120,8 +120,7 @@ curl --request DELETE \
   "dataSource": "events",
   "aggFn": "count",
   "field": "",
-  "where": "level:error",
-  "groupBy": ["brandId"]
+  "where": "level:error"
 }
 ```
 
@@ -171,9 +170,6 @@ Use the same syntax as HyperDX search UI:
 ```
 # Exact match
 level:error
-
-# Field exists
-brandId:*
 
 # Multiple conditions
 level:error AND module:shipment-tracking
@@ -315,8 +311,7 @@ curl --request POST \
         "dataSource": "events",
         "aggFn": "count",
         "field": "",
-        "where": "level:error",
-        "groupBy": ["brandId"]
+        "where": "level:error"
       }
     ]
   }'
@@ -354,8 +349,7 @@ curl --request POST \
             "dataSource": "events",
             "aggFn": "count",
             "field": "",
-            "where": "level:error",
-            "groupBy": ["brandId"]
+            "where": "level:error"
           }
         ]
       }
@@ -640,7 +634,6 @@ Fields available for filtering and grouping in Open Mercato:
 | `message` | Log message | `"Fetching events from carrier"` |
 | `tenantId` | Tenant identifier | UUID |
 | `organizationId` | Organization identifier | UUID |
-| `brandId` | Brand identifier | `freighttech`, `openmercato` |
 | `userId` | User identifier | UUID |
 | `environment` | Deployment environment | `development`, `staging`, `production` |
 

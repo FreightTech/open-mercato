@@ -9,7 +9,6 @@ export type LogContext = {
   requestId?: string
   module?: string
   service?: string
-  brandId?: string
   [key: string]: unknown
 }
 
