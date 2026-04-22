@@ -4,6 +4,7 @@ import * as React from 'react'
 import type { InjectionWidgetComponentProps } from '@open-mercato/shared/modules/widgets/injection'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { LoadingMessage } from '@open-mercato/ui/backend/detail'
+import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 
 interface SyncSettings {
   syncEnabled: boolean
@@ -30,6 +31,7 @@ function getDefaultDateTo(): string {
 }
 
 export default function KsefSettingsWidget(_props: InjectionWidgetComponentProps) {
+  const scopeVersion = useOrganizationScopeVersion()
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
   const [settings, setSettings] = React.useState<SyncSettings>({
@@ -41,11 +43,13 @@ export default function KsefSettingsWidget(_props: InjectionWidgetComponentProps
   // Manual sync state
   const [fetchDateFrom, setFetchDateFrom] = React.useState(getDefaultDateFrom)
   const [fetchDateTo, setFetchDateTo] = React.useState(getDefaultDateTo)
-  const [fetchSubjectType, setFetchSubjectType] = React.useState('subject2')
   const [fetchLoading, setFetchLoading] = React.useState(false)
   const [fetchResult, setFetchResult] = React.useState<{ ok: boolean; message: string } | null>(null)
 
   React.useEffect(() => {
+    setLoading(true)
+    setSettings({ syncEnabled: false, syncIntervalMinutes: 60 })
+    setSaveResult(null)
     async function load() {
       const result = await apiCall<SyncSettings>('/api/ksef/settings')
       if (result.ok && result.result) {
@@ -54,7 +58,7 @@ export default function KsefSettingsWidget(_props: InjectionWidgetComponentProps
       setLoading(false)
     }
     load()
-  }, [])
+  }, [scopeVersion])
 
   const handleSave = async () => {
     setSaving(true)
@@ -81,7 +85,6 @@ export default function KsefSettingsWidget(_props: InjectionWidgetComponentProps
       body: JSON.stringify({
         dateFrom: fetchDateFrom || undefined,
         dateTo: fetchDateTo || undefined,
-        subjectType: fetchSubjectType,
       }),
     })
     setFetchLoading(false)
@@ -177,19 +180,7 @@ export default function KsefSettingsWidget(_props: InjectionWidgetComponentProps
         </div>
 
         <div className="rounded-lg border p-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Invoice type</label>
-              <select
-                value={fetchSubjectType}
-                onChange={(e) => setFetchSubjectType(e.target.value)}
-                className="w-full rounded-md border px-3 py-1.5 text-sm bg-background"
-              >
-                <option value="subject2">Incoming (received)</option>
-                <option value="subject1">Outgoing (issued)</option>
-                <option value="subject3">Other</option>
-              </select>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Date from</label>
               <input

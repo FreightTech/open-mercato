@@ -123,7 +123,69 @@ export async function createCalculationForItem(
   return calcRes.ok && calcRes.result?.id ? calcRes.result.id : null
 }
 
-/** Resolve location names from IDs for a set of items */
+/**
+ * Resolve missing location IDs from text (e.g. "Gdansk (PLGDN)") for legacy items
+ * that only have origin/destination strings. Writes resolved IDs back to the
+ * calculation row on the server so the fix persists and future loads skip this path.
+ */
+export async function resolveMissingLocationIds(
+  items: WizardItem[],
+  calculationIds: string[],
+  mountedRef: React.MutableRefObject<boolean>,
+  setEditableItems: React.Dispatch<React.SetStateAction<WizardItem[]>>,
+): Promise<void> {
+  const patches: Array<{ index: number; calcId: string; update: Partial<WizardItem> }> = []
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const calcId = calculationIds[i]
+    if (!calcId) continue
+    const needsOrigin = !!item.origin && !item.originLocationId
+    const needsDest = !!item.destination && !item.destinationLocationId
+    if (!needsOrigin && !needsDest) continue
+
+    const update: Partial<WizardItem> = {}
+    if (needsOrigin) {
+      const loc = await resolveLocation(item.origin!)
+      if (loc) { update.originLocationId = loc.id; update.origin = loc.name }
+    }
+    if (needsDest) {
+      const loc = await resolveLocation(item.destination!)
+      if (loc) { update.destinationLocationId = loc.id; update.destination = loc.name }
+    }
+    if (Object.keys(update).length > 0) patches.push({ index: i, calcId, update })
+  }
+
+  if (patches.length === 0) return
+
+  if (mountedRef.current) {
+    setEditableItems((prev) => {
+      const next = [...prev]
+      for (const p of patches) {
+        if (next[p.index]) next[p.index] = { ...next[p.index], ...p.update }
+      }
+      return next
+    })
+  }
+
+  for (const p of patches) {
+    await apiCall(`/api/fms_offers/calculations/${p.calcId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        originLocationId: p.update.originLocationId,
+        destinationLocationId: p.update.destinationLocationId,
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+}
+
+/**
+ * Resolve location names from IDs for a set of items.
+ * Populates the text fields (origin, destination, placeOfLoading, placeOfDelivery)
+ * paired with their *Id counterparts so downstream consumers that read the name
+ * field keep working after an offer is reloaded from the server.
+ */
 export async function resolveLocationNamesFromIds(
   items: WizardItem[],
   mountedRef: React.MutableRefObject<boolean>,
@@ -133,6 +195,8 @@ export async function resolveLocationNamesFromIds(
   for (const it of items) {
     if (it.originLocationId) locationIdsToResolve.add(it.originLocationId)
     if (it.destinationLocationId) locationIdsToResolve.add(it.destinationLocationId)
+    if (it.placeOfLoadingId) locationIdsToResolve.add(it.placeOfLoadingId)
+    if (it.placeOfDeliveryId) locationIdsToResolve.add(it.placeOfDeliveryId)
   }
   if (locationIdsToResolve.size === 0) return
 
@@ -146,8 +210,25 @@ export async function resolveLocationNamesFromIds(
       ...it,
       origin: (it.originLocationId && locNameMap.get(it.originLocationId)) || it.origin,
       destination: (it.destinationLocationId && locNameMap.get(it.destinationLocationId)) || it.destination,
+      placeOfLoading: (it.placeOfLoadingId && locNameMap.get(it.placeOfLoadingId)) || it.placeOfLoading,
+      placeOfDelivery: (it.placeOfDeliveryId && locNameMap.get(it.placeOfDeliveryId)) || it.placeOfDelivery,
     })))
   }
+}
+
+/**
+ * Resolve a contractor's display name for PDF/preview steps.
+ * Falls back to companyName when the contractor cannot be resolved.
+ */
+export async function resolveClientDisplayName(input: {
+  contractorId?: string | null
+  companyName?: string | null
+}): Promise<string | null> {
+  if (input.contractorId) {
+    const cRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${input.contractorId}`)
+    if (cRes.ok && cRes.result?.name) return cRes.result.name
+  }
+  return input.companyName || null
 }
 
 /** Resolve carrier and provider names from IDs */

@@ -9,14 +9,8 @@ export const injectionTable: ModuleInjectionTable = {
       priority: 90,
     },
   ],
-  // KSeF tabs on the Integration Marketplace detail page
+  // KSeF Invoices tab on the Integration Marketplace detail page
   [ksefDetailWidgetSpotId]: [
-    {
-      widgetId: 'ksef.injection.dashboard',
-      kind: 'tab',
-      groupLabel: 'ksef.tabs.dashboard',
-      priority: 300,
-    },
     {
       widgetId: 'ksef.injection.invoices',
       kind: 'tab',

@@ -16,7 +16,9 @@ import {
   saveItemFieldsToServer,
   createCalculationForItem,
   resolveLocationNamesFromIds,
+  resolveMissingLocationIds,
   resolveCarrierProviderNames,
+  resolveClientDisplayName,
 } from '../../tasks_board/lib/wizard-utils'
 
 type UseOfferWizardStateInput = {
@@ -62,6 +64,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
   // Draft offer tracking
   const [offerId, setOfferId] = useState<string | null>(null)
   const [offerNumber, setOfferNumber] = useState<string | null>(null)
+  const [rfqId, setRfqId] = useState<string | null>(null)
   const [calculationIds, setCalculationIds] = useState<string[]>([])
 
   // Multi-offer tabs
@@ -104,6 +107,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       setOfferId(offer.id)
       offerIdRef.current = offer.id
       setOfferNumber(offer.offerNumber || null)
+      setRfqId(offer.rfqId || offer.rfq?.id || null)
       setOfferType(offer.type || 'sell')
       setOfferStatus(offer.status || 'draft')
       setProjects(offer.projects || [])
@@ -135,13 +139,16 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       offerTabsRef.current = allTabs
       setActiveOfferTabIndex(activeIdx)
       activeOfferTabIndexRef.current = activeIdx
-      setContractorId(offer.contractorId || null)
-      // Resolve contractor name
-      if (offer.contractorId) {
-        const cRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${offer.contractorId}`)
-        if (cRes.ok && cRes.result?.name && mountedRef.current) {
-          setContractorName(cRes.result.name)
-        }
+      // Use offer's contractor first; fall back to the RFQ's contractor so the wizard
+      // Client panel and PDF preview both display the same contractor consistently.
+      const effectiveContractorId = offer.contractorId || offer.rfq?.contractorId || null
+      setContractorId(effectiveContractorId)
+      const clientDisplayName = await resolveClientDisplayName({
+        contractorId: effectiveContractorId,
+        companyName: offer.rfq?.companyName || null,
+      })
+      if (clientDisplayName && mountedRef.current) {
+        setContractorName(clientDisplayName)
       }
       setDirection(offer.direction || null)
       setTransportMode(offer.transportMode || null)
@@ -173,9 +180,9 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       allItems.push({
         containerType: mainCalc.containers?.[0] || null,
         containerCount: mainCalc.containers?.length || null,
-        origin: null,
+        origin: offer.rfq?.origin ?? null,
         originLocationId: mainCalc.originLocationId || null,
-        destination: null,
+        destination: offer.rfq?.destination ?? null,
         destinationLocationId: mainCalc.destinationLocationId || null,
         placeOfLoading: null,
         placeOfLoadingId: mainCalc.placeOfLoadingId || null,
@@ -197,7 +204,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
         chargeRows: (mainCalc.lines || []).filter((l: any) => !l.deletedAt).map((l: any) => offerLineToChargeRow(l)),
       })
 
-      // Additional items from route calcs
+      // Additional items from route calcs — inherit offer-level transport mode / incoterm so
+      // the UI renders a populated route card instead of a blank one for each extra route.
       for (const rc of routeCalcs) {
         allItems.push({
           containerType: rc.containers?.[0] || null,
@@ -213,8 +221,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
           cargoDescription: null,
           weightKg: null,
           readinessDate: null,
-          incoterm: null,
-          transportMode: null,
+          incoterm: offer.incoterm || null,
+          transportMode: offer.transportMode || null,
           notes: null,
           carrierIds: [],
           carrierNames: [],
@@ -232,9 +240,17 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       setCalculationIds(allCalcIds)
       calculationIdsRef.current = allCalcIds
       setExpandedBoxes(new Set(allItems.map((_, i) => i)))
+      // Expand POL/POD slots for items that have them persisted, so the resolved name shows immediately
+      const polIdxs = allItems.reduce<number[]>((acc, it, i) => it.placeOfLoadingId ? [...acc, i] : acc, [])
+      const podIdxs = allItems.reduce<number[]>((acc, it, i) => it.placeOfDeliveryId ? [...acc, i] : acc, [])
+      if (polIdxs.length > 0) setExpandedPol(new Set(polIdxs))
+      if (podIdxs.length > 0) setExpandedPod(new Set(podIdxs))
 
       // Resolve location names from IDs for all items
       await resolveLocationNamesFromIds(allItems, mountedRef, setEditableItems)
+
+      // Self-heal: resolve missing location IDs from text for legacy offers
+      await resolveMissingLocationIds(allItems, allCalcIds, mountedRef, setEditableItems)
 
       // Resolve carrier/provider names from IDs (offer-level, applied to item 0)
       await resolveCarrierProviderNames(
@@ -638,20 +654,21 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     // Restore offer-level fields
     setOfferType(offer.type || 'sell')
     setOfferStatus(offer.status || 'draft')
+    setRfqId(offer.rfqId || offer.rfq?.id || null)
     setDirection(offer.direction || null)
     setTransportMode(offer.transportMode || null)
     setCargoType(offer.cargoType || null)
     if (offer.validUntil) setValidUntil(offer.validUntil)
     setSpecialTerms(offer.specialTerms || '')
     setProjects(offer.projects || [])
-    setContractorId(offer.contractorId || null)
-    if (offer.contractorId) {
-      const cRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${offer.contractorId}`)
-      if (cRes.ok && cRes.result?.name && mountedRef.current) {
-        setContractorName(cRes.result.name)
-      }
-    } else {
-      setContractorName(null)
+    const tabEffectiveContractorId = offer.contractorId || offer.rfq?.contractorId || null
+    setContractorId(tabEffectiveContractorId)
+    const tabClientName = await resolveClientDisplayName({
+      contractorId: tabEffectiveContractorId,
+      companyName: offer.rfq?.companyName || null,
+    })
+    if (mountedRef.current) {
+      setContractorName(tabClientName)
     }
 
     // Rebuild calculations and editable items from the switched offer
@@ -671,9 +688,9 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       newItems.push({
         containerType: mainCalc.containers?.[0] || null,
         containerCount: mainCalc.containers?.length || null,
-        origin: null,
+        origin: offer.rfq?.origin ?? null,
         originLocationId: mainCalc.originLocationId || null,
-        destination: null,
+        destination: offer.rfq?.destination ?? null,
         destinationLocationId: mainCalc.destinationLocationId || null,
         placeOfLoading: null,
         placeOfLoadingId: mainCalc.placeOfLoadingId || null,
@@ -710,8 +727,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
           cargoDescription: null,
           weightKg: null,
           readinessDate: null,
-          incoterm: null,
-          transportMode: null,
+          incoterm: offer.incoterm || null,
+          transportMode: offer.transportMode || null,
           notes: null,
           carrierIds: [],
           carrierNames: [],
@@ -729,9 +746,15 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setEditableItems(newItems.length > 0 ? newItems : [makeEmptyItem()])
     setCalculations(newCalcs.length > 0 ? newCalcs : [{ chargeRows: [] }])
     setExpandedBoxes(new Set(newItems.map((_, i) => i)))
+    // Expand POL/POD slots for items that have them persisted
+    const tabPolIdxs = newItems.reduce<number[]>((acc, it, i) => it.placeOfLoadingId ? [...acc, i] : acc, [])
+    const tabPodIdxs = newItems.reduce<number[]>((acc, it, i) => it.placeOfDeliveryId ? [...acc, i] : acc, [])
+    setExpandedPol(tabPolIdxs.length > 0 ? new Set(tabPolIdxs) : new Set())
+    setExpandedPod(tabPodIdxs.length > 0 ? new Set(tabPodIdxs) : new Set())
 
     // Resolve location names and carrier/provider names for the switched offer's items
     await resolveLocationNamesFromIds(newItems, mountedRef, setEditableItems)
+    await resolveMissingLocationIds(newItems, newCalcIds, mountedRef, setEditableItems)
     await resolveCarrierProviderNames(
       offer.carrierIds || [],
       offer.providerIds || [],
@@ -764,6 +787,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setCalculations([{ chargeRows: [] }])
     setOfferId(null)
     setOfferNumber(null)
+    setRfqId(null)
     setProjects([])
     setCalculationIds([])
     setOfferTabs([])
@@ -816,6 +840,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     // Draft offer
     offerId,
     offerNumber,
+    rfqId,
     calculationIds,
     specialTerms,
     updateSpecialTerms,

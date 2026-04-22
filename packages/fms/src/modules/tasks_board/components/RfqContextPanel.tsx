@@ -62,7 +62,8 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contractorId: newContractorId, companyName: name ?? null }),
     })
-  }, [rfqId])
+    queryClient.invalidateQueries({ queryKey: ['rfq-detail', rfqId] })
+  }, [rfqId, queryClient])
 
   const handleClearContractor = useCallback(async () => {
     setContractorId(null)
@@ -71,9 +72,10 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
     await apiCall(`/api/fms_offers/rfq/${rfqId}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ contractorId: null }),
+      body: JSON.stringify({ contractorId: null, companyName: null }),
     })
-  }, [rfqId])
+    queryClient.invalidateQueries({ queryKey: ['rfq-detail', rfqId] })
+  }, [rfqId, queryClient])
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections((prev) => {

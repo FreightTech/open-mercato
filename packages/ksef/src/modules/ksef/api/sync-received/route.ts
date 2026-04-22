@@ -18,12 +18,12 @@ export async function POST(request: NextRequest) {
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const tenantId = (auth.actorTenantId as string | undefined) || auth.tenantId
+  const tenantId = auth.tenantId
   if (!tenantId) {
     return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
   }
 
-  const organizationId = (auth.actorOrgId || auth.orgId) as string
+  const organizationId = auth.orgId as string
 
   let body: Record<string, unknown> = {}
   try {
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       nip: string
       dateFrom?: string
       dateTo?: string
-      subjectType?: string
+      subjectTypes?: string[]
     }>('ksef-receive-sync', queueStrategy, {
       connection: queueStrategy === 'async' ? { url: getRedisUrl('QUEUE') } : undefined,
     })
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       nip,
       dateFrom: parsed.data.dateFrom,
       dateTo: parsed.data.dateTo,
-      subjectType: parsed.data.subjectType,
+      subjectTypes: parsed.data.subjectTypes,
     })
 
     return NextResponse.json({

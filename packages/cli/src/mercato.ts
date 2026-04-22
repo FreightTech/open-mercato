@@ -957,6 +957,30 @@ export async function run(argv = process.argv) {
     ],
   } as any)
   
+  const runGeneratorSuite = async (quiet: boolean) => {
+    const { createResolver } = await import('./lib/resolver')
+    const {
+      generateEntityIds,
+      generateModuleRegistry,
+      generateModuleRegistryApp,
+      generateModuleRegistryCli,
+      generateModuleEntities,
+      generateModuleDi,
+      generateModulePackageSources,
+      generateOpenApi,
+    } = await import('./lib/generators')
+    const resolver = createResolver()
+
+    await generateEntityIds({ resolver, quiet })
+    await generateModuleRegistry({ resolver, quiet })
+    await generateModuleRegistryApp({ resolver, quiet })
+    await generateModuleRegistryCli({ resolver, quiet })
+    await generateModuleEntities({ resolver, quiet })
+    await generateModuleDi({ resolver, quiet })
+    await generateModulePackageSources({ resolver, quiet })
+    await generateOpenApi({ resolver, quiet })
+  }
+
   // Built-in CLI module: generate
   all.push({
     id: 'generate',
@@ -964,20 +988,10 @@ export async function run(argv = process.argv) {
       {
         command: 'all',
         run: async (args: string[]) => {
-          const { createResolver } = await import('./lib/resolver')
-          const { generateEntityIds, generateModuleRegistry, generateModuleRegistryApp, generateModuleRegistryCli, generateModuleEntities, generateModuleDi, generateModulePackageSources, generateOpenApi } = await import('./lib/generators')
-          const resolver = createResolver()
           const quiet = args.includes('--quiet') || args.includes('-q')
 
           console.log('Running all generators...')
-          await generateEntityIds({ resolver, quiet })
-          await generateModuleRegistry({ resolver, quiet })
-          await generateModuleRegistryApp({ resolver, quiet })
-          await generateModuleRegistryCli({ resolver, quiet })
-          await generateModuleEntities({ resolver, quiet })
-          await generateModuleDi({ resolver, quiet })
-          await generateModulePackageSources({ resolver, quiet })
-          await generateOpenApi({ resolver, quiet })
+          await runGeneratorSuite(quiet)
           console.log('All generators completed.')
         },
       },
@@ -986,7 +1000,6 @@ export async function run(argv = process.argv) {
         run: async (args: string[]) => {
           const { createResolver } = await import('./lib/resolver')
           const { calculateStructureChecksum } = await import('./lib/utils')
-          const { generateEntityIds, generateModuleRegistry, generateModuleRegistryApp, generateModuleRegistryCli, generateModuleEntities, generateModuleDi, generateModulePackageSources, generateOpenApi } = await import('./lib/generators')
           const quiet = args.includes('--quiet') || args.includes('-q')
           const skipInitial = args.includes('--skip-initial')
           const intervalArg = args.find((arg) => arg.startsWith('--interval='))
@@ -1010,18 +1023,6 @@ export async function run(argv = process.argv) {
             return Array.from(tracked)
           }
 
-          const runGeneratorSuite = async () => {
-            const resolver = createResolver()
-            await generateEntityIds({ resolver, quiet })
-            await generateModuleRegistry({ resolver, quiet })
-            await generateModuleRegistryApp({ resolver, quiet })
-            await generateModuleRegistryCli({ resolver, quiet })
-            await generateModuleEntities({ resolver, quiet })
-            await generateModuleDi({ resolver, quiet })
-            await generateModulePackageSources({ resolver, quiet })
-            await generateOpenApi({ resolver, quiet })
-          }
-
           const runWatchGeneration = async (reason: string) => {
             if (running) {
               pending = true
@@ -1032,7 +1033,7 @@ export async function run(argv = process.argv) {
               if (!quiet) {
                 console.log(`[generate:watch] Regenerating (${reason})...`)
               }
-              await runGeneratorSuite()
+              await runGeneratorSuite(true)
               if (!quiet) {
                 console.log('[generate:watch] Generators completed.')
               }
@@ -1052,6 +1053,9 @@ export async function run(argv = process.argv) {
           }
           previousChecksum = calculateStructureChecksum(getTrackedPaths())
           if (!quiet) {
+            if (skipInitial) {
+              console.log('[generate:watch] Skipping initial regeneration and watching the current generated state.')
+            }
             console.log(`[generate:watch] Watching structural module files every ${intervalMs}ms`)
           }
 

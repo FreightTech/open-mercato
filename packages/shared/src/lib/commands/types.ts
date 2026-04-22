@@ -11,6 +11,7 @@ export type CommandRuntimeContext = {
   organizationIds: string[] | null
   request?: Request
   syncOrigin?: string | null
+  brandId?: string | null
 }
 
 export type CommandLogMetadata = {

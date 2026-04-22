@@ -20,7 +20,9 @@ export const submitBatchSchema = z.object({
 export const syncReceivedSchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
-  subjectType: z.enum(['subject1', 'subject2', 'subject3']).default('subject2'),
+  subjectTypes: z.array(z.enum(['subject1', 'subject2', 'subject3']))
+    .min(1)
+    .default(['subject1', 'subject2', 'subject3']),
 })
 
 export type SubmitBatchDto = z.infer<typeof submitBatchSchema>

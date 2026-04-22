@@ -85,6 +85,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'webhooks', from: '@open-mercato/webhooks' },
   { id: 'customer_accounts', from: '@open-mercato/core' },
   { id: 'portal', from: '@open-mercato/core' },
+  { id: 'customs', from: '@open-mercato/customs' },
 ]
 
 if (enabledModules.some((entry) => entry.id === 'example')) {

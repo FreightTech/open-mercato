@@ -123,6 +123,11 @@ export type OfferLineData = {
 export type OfferCalcData = {
   id: string
   sectionType?: string | null
+  containers?: string[] | null
+  originLocationId?: string | null
+  destinationLocationId?: string | null
+  placeOfLoadingId?: string | null
+  placeOfDeliveryId?: string | null
   lines: OfferLineData[]
 }
 
@@ -134,6 +139,10 @@ export type OfferFullData = {
   createdAt: string
   validUntil: string | null
   transportMode: string | null
+  incoterm?: string | null
+  customerNotes?: string | null
+  carrierIds?: string[] | null
+  providerIds?: string[] | null
   specialTerms: string | null
   baseCurrency?: string | null
   exchangeRates?: Array<{ fromCurrencyCode: string; toCurrencyCode: string; rate: string; date: string; source: string }> | null
@@ -254,12 +263,54 @@ export function mapProductChargeUnit(chargeUnit: string | null | undefined): str
 export async function resolveLocation(name: string): Promise<{ id: string; name: string } | null> {
   if (!name) return null
   const { apiCall } = await import('@open-mercato/ui/backend/utils/apiCall')
-  const params = new URLSearchParams({ q: name, limit: '5' })
-  const res = await apiCall<{ items?: LocationItem[] }>(`/api/fms_locations/locations?${params}`)
-  const items = res.result?.items || []
-  if (items.length === 0) return null
-  const exact = items.find((loc) => loc.name.toLowerCase() === name.toLowerCase())
-  return exact ? { id: exact.id, name: exact.name } : { id: items[0].id, name: items[0].name }
+  const trimmed = name.trim()
+  const codeMatch = trimmed.match(/^(.+?)\s*\(([^)]+)\)\s*$/)
+  const baseName = codeMatch ? codeMatch[1].trim() : trimmed
+  const code = codeMatch ? codeMatch[2].trim() : null
+
+  const fetchById = async (id: string): Promise<{ id: string; name: string } | null> => {
+    const res = await apiCall<{ id: string; name: string }>(`/api/fms_locations/locations/${id}`)
+    return res.ok && res.result?.id ? { id: res.result.id, name: res.result.name } : null
+  }
+
+  const searchMeili = async (q: string): Promise<string | null> => {
+    const params = new URLSearchParams({
+      q,
+      entityTypes: 'fms_locations:fms_location',
+      strategies: 'fulltext',
+      limit: '5',
+    })
+    const res = await apiCall<{ results?: Array<{ recordId: string }> }>(`/api/search/search?${params}`)
+    return res.ok ? res.result?.results?.[0]?.recordId || null : null
+  }
+
+  const searchIlike = async (q: string): Promise<LocationItem[]> => {
+    const params = new URLSearchParams({ q, limit: '5' })
+    const res = await apiCall<{ items?: LocationItem[] }>(`/api/fms_locations/locations?${params}`)
+    return res.ok ? res.result?.items || [] : []
+  }
+
+  const queries = code ? [code, baseName] : [baseName]
+
+  for (const q of queries) {
+    const recordId = await searchMeili(q)
+    if (recordId) {
+      const loc = await fetchById(recordId)
+      if (loc) return loc
+    }
+  }
+
+  for (const q of queries) {
+    const items = await searchIlike(q)
+    if (items.length === 0) continue
+    const exactName = items.find((loc) => loc.name.toLowerCase() === baseName.toLowerCase())
+    if (exactName) return { id: exactName.id, name: exactName.name }
+    const exactCode = code ? items.find((loc) => (loc as any).code?.toLowerCase() === code.toLowerCase()) : null
+    if (exactCode) return { id: exactCode.id, name: exactCode.name }
+    return { id: items[0].id, name: items[0].name }
+  }
+
+  return null
 }
 
 export const sectionLabelStyle: React.CSSProperties = {

@@ -1,6 +1,6 @@
 {
   "name": "@open-mercato/ksef",
-  "version": "0.2.29",
+  "version": "0.2.35",
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {

@@ -54,20 +54,42 @@ export function RfqWizardSheet({
     }
   }, [editingTabLabel])
 
-  const { rfqId: stateRfqId, reset: stateReset } = state
+  const { rfqId: stateRfqId, reset: stateReset, flushPendingSync: stateFlushPendingSync } = state
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen) {
-        if (stateRfqId) {
-          queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-          queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
-        }
-        stateReset()
+        const targetRfqId = stateRfqId
+        // Flush any debounced charge row / item field syncs before the reset
+        // clears their timers — otherwise lines typed just before close are lost.
+        void stateFlushPendingSync().finally(() => {
+          if (targetRfqId) {
+            queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+            queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
+          }
+          stateReset()
+          onOpenChange(nextOpen)
+          // Wipe rfq-detail + offer caches after the close flow has settled.
+          // Radix Sheet keeps this hook mounted across open/close, so without
+          // this the next reopen reads the stale pre-close snapshot first
+          // (before a refetch can resolve), and the one-shot init gates in
+          // useRfqWizardState hydrate from that stale data. Deferring past
+          // stateReset + onOpenChange lets React disable the observers
+          // (rfqId=null, open=false) before removeQueries fires, so we don't
+          // trigger a stray refetch racing the close — which was the failure
+          // mode of the earlier unguarded removeQueries attempt.
+          if (targetRfqId) {
+            setTimeout(() => {
+              queryClient.removeQueries({ queryKey: ['rfq-detail', targetRfqId] })
+              queryClient.removeQueries({ queryKey: ['offer'] })
+            }, 0)
+          }
+        })
+        return
       }
       onOpenChange(nextOpen)
     },
-    [onOpenChange, stateRfqId, stateReset, queryClient],
+    [onOpenChange, stateRfqId, stateReset, stateFlushPendingSync, queryClient],
   )
 
   const handleDelete = useCallback(() => {
@@ -355,7 +377,7 @@ export function RfqWizardSheet({
                     onSpecialTermsChange={state.updateSpecialTerms}
                     initialBaseCurrency={state.draftOffer?.baseCurrency}
                     initialExchangeRates={state.draftOffer?.exchangeRates}
-                    clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
+                    clientName={state.clientDisplayName || state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
                     offerTabs={state.offerTabs}
                     pdfMode={pdfMode}
                     onPdfModeChange={setPdfMode}
@@ -452,7 +474,7 @@ export function RfqWizardSheet({
         <SendOfferDialog
           offerId={state.offerId}
           offerNumber={state.offerNumber || ''}
-          clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
+          clientName={state.clientDisplayName || state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
           currentStatus="draft"
           open={sendDialogOpen}
           onClose={() => setSendDialogOpen(false)}
