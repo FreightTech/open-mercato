@@ -1,9 +1,7 @@
 import type { JobContext, QueuedJob, WorkerMeta } from '@open-mercato/queue'
 import type { EntityManager } from '@mikro-orm/core'
 import { CurrencyFetchConfig } from '../data/entities'
-import { RateFetchingService } from '../services/rateFetchingService'
-import { NBPProvider } from '../services/providers/nbp'
-import { RaiffeisenPolandProvider } from '../services/providers/raiffeisen'
+import type { RateFetchingService } from '../services/rateFetchingService'
 
 // Inlined to keep the metadata literal extractable by the module generator.
 // Must match FETCH_RATES_QUEUE_NAME in lib/fetchScheduleService.ts.
@@ -41,14 +39,11 @@ export default async function handle(
     return
   }
 
-  let fetchService: RateFetchingService
-  try {
-    fetchService = ctx.resolve<RateFetchingService>('rateFetchingService')
-  } catch {
-    fetchService = new RateFetchingService(em)
-    fetchService.registerProvider(new NBPProvider())
-    fetchService.registerProvider(new RaiffeisenPolandProvider())
-  }
+  // The currencies module always registers rateFetchingService in di.ts; if
+  // resolution fails, that's a real misconfiguration and should not be masked
+  // by a hardcoded provider fallback (which would also miss any custom
+  // providers a downstream registers).
+  const fetchService = ctx.resolve<RateFetchingService>('rateFetchingService')
 
   try {
     const result = await fetchService.fetchRatesForDate(

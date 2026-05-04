@@ -63,19 +63,28 @@ export function createFetchScheduleService(
   em: EntityManager,
   schedulerService?: SchedulerServiceLike,
 ) {
+  async function safeUnregister(scheduleId: string, reason: string): Promise<void> {
+    if (!schedulerService) return
+    try {
+      await schedulerService.unregister(scheduleId)
+    } catch (err) {
+      console.warn(`[currencies] unregister(${scheduleId}) failed (${reason}):`, err)
+    }
+  }
+
   async function syncFromConfig(config: CurrencyFetchConfig): Promise<void> {
     if (!schedulerService) return
 
     const scheduleId = buildFetchScheduleId(config.id)
 
     if (!config.isEnabled || !config.syncTime) {
-      await schedulerService.unregister(scheduleId).catch(() => undefined)
+      await safeUnregister(scheduleId, 'config disabled or syncTime missing')
       return
     }
 
     const cron = syncTimeToCron(config.syncTime)
     if (!cron) {
-      await schedulerService.unregister(scheduleId).catch(() => undefined)
+      await safeUnregister(scheduleId, 'malformed syncTime')
       return
     }
 
@@ -107,7 +116,7 @@ export function createFetchScheduleService(
   async function removeForConfig(configId: string): Promise<void> {
     if (!schedulerService) return
     const scheduleId = buildFetchScheduleId(configId)
-    await schedulerService.unregister(scheduleId).catch(() => undefined)
+    await safeUnregister(scheduleId, 'config deleted')
   }
 
   async function reconcile(scope: { tenantId: string; organizationId: string }): Promise<number> {

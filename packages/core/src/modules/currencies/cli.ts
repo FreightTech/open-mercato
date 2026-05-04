@@ -235,9 +235,9 @@ const reconcileSchedulesCommand: ModuleCli = {
     const container = await createRequestContainer()
 
     try {
-      if (!container.hasRegistration('currencyFetchScheduleService')) {
+      if (!container.hasRegistration('schedulerService')) {
         console.error(
-          '❌ currencyFetchScheduleService not registered. Is the scheduler module enabled?'
+          '❌ schedulerService not registered. Enable the @open-mercato/scheduler module to use this command.'
         )
         process.exit(1)
       }
