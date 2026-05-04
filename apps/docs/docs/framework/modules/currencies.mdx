@@ -467,6 +467,37 @@ Request body:
 }
 ```
 
+## How daily fetches are scheduled
+
+When a `CurrencyFetchConfig` is enabled with a `syncTime` (e.g. `09:00`) and a `timezone` (e.g. `Europe/Warsaw`), the module persists a row in `scheduled_jobs` (owned by `@open-mercato/scheduler`) that fires a job onto the `currencies-fetch-rates` queue every day at that local time. The dedicated `fetch-rates.worker.ts` consumes those jobs and runs `RateFetchingService.fetchRatesForDate` for the configured provider.
+
+Sequence:
+
+```
+Admin UI                    API/Command                     Scheduler                BullMQ                      Worker
+   │                            │                                │                       │                            │
+   │ toggle isEnabled=true ────▶│                                │                       │                            │
+   │ syncTime='09:00'           │                                │                       │                            │
+   │ timezone='Europe/Warsaw'   │                                │                       │                            │
+   │                            │ updateFetchConfig() ──persist──▶                       │                            │
+   │                            │ fetchScheduleService           │                       │                            │
+   │                            │   .syncFromConfig(config) ────▶│ register({            │                            │
+   │                            │                                │   id, queue,          │                            │
+   │                            │                                │   scheduleValue,      │                            │
+   │                            │                                │   timezone, … })      │                            │
+   │                            │                                │ ─upsert ScheduledJob──┤                            │
+   │                            │                                │ ─sync repeat job ────▶│                            │
+   │                            │                                │                       │                            │
+   │                            │                                │                       │ … 09:00 Europe/Warsaw …    │
+   │                            │                                │                       │ enqueue payload ──────────▶│ fetchRatesForDate(date)
+   │                            │                                │                       │                            │ persist exchange_rates
+   │                            │                                │                       │                            │ update lastSync* on config
+```
+
+Decoupling rule: the wrapper service in `currencies/lib/fetchScheduleService.ts` does **not** import from `@open-mercato/scheduler`. It depends on a structural `SchedulerServiceLike` and resolves `schedulerService` only via DI; if no scheduler is registered, the wrapper is a no-op and the rest of the module continues to work (fetch-now, manual CLI fetches, etc).
+
+Reconciliation: `setup.ts seedDefaults` calls `reconcile()` on bootstrap to register schedules for any pre-existing enabled configs. `mercato currencies reconcile-schedules --tenant <id> --org <id>` is the manual escape hatch.
+
 ## CLI Commands
 
 ### Fetch Rates
@@ -497,6 +528,14 @@ yarn mercato currencies seed
 ```
 
 Creates example currencies (USD, EUR, PLN, GBP) for testing.
+
+### Reconcile Daily-Fetch Schedules
+
+```bash
+yarn mercato currencies reconcile-schedules --tenant <id> --org <id>
+```
+
+Re-registers a `scheduled_jobs` row for every `CurrencyFetchConfig` in the given scope. Use this after enabling the scheduler module on an existing tenant or when the `scheduled_jobs` table has been wiped manually.
 
 ## Access Control (ACL)
 

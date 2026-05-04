@@ -13,10 +13,46 @@ interface FetchConfig {
   provider: string
   isEnabled: boolean
   syncTime: string | null
+  timezone: string
   lastSyncAt: string | null
   lastSyncStatus: string | null
   lastSyncMessage: string | null
   lastSyncCount: number | null
+}
+
+function detectBrowserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+function listTimezones(): string[] {
+  try {
+    const supported = (Intl as any).supportedValuesOf?.('timeZone') as string[] | undefined
+    if (Array.isArray(supported) && supported.length > 0) return supported
+  } catch {
+    // fall through
+  }
+  return [
+    'UTC',
+    'Europe/Warsaw',
+    'Europe/London',
+    'Europe/Berlin',
+    'Europe/Paris',
+    'Europe/Madrid',
+    'Europe/Amsterdam',
+    'Europe/Brussels',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'Asia/Tokyo',
+    'Asia/Shanghai',
+    'Asia/Singapore',
+    'Australia/Sydney',
+  ]
 }
 
 export default function CurrencyFetchingConfig() {
@@ -29,6 +65,9 @@ export default function CurrencyFetchingConfig() {
   // Available providers that should be configured
   const availableProviders = useMemo(() => ['NBP', 'Raiffeisen Bank Polska'], [])
 
+  const browserTimezone = useMemo(() => detectBrowserTimezone(), [])
+  const timezoneOptions = useMemo(() => listTimezones(), [])
+
   const createProviderConfig = useCallback(async (provider: string) => {
     try {
       await apiCall('/api/currencies/fetch-configs', {
@@ -38,6 +77,7 @@ export default function CurrencyFetchingConfig() {
           provider,
           isEnabled: false,
           syncTime: '09:00',
+          timezone: browserTimezone,
         }),
       })
     } catch (err: any) {
@@ -46,7 +86,7 @@ export default function CurrencyFetchingConfig() {
         throw err
       }
     }
-  }, [])
+  }, [browserTimezone])
 
   const initializeMissingProviders = useCallback(async (providers: string[]) => {
     setInitializing(true)
@@ -137,6 +177,27 @@ export default function CurrencyFetchingConfig() {
       }
     } catch (err: any) {
       flash(err.message || t('currencies.fetch.error_update_sync_time'), 'error')
+    }
+  }, [t])
+
+  const updateTimezone = useCallback(async (configId: string, timezone: string) => {
+    try {
+      const { result } = await apiCall('/api/currencies/fetch-configs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: configId,
+          timezone,
+        }),
+      })
+
+      if (result?.config) {
+        setConfigs((prev) =>
+          prev.map((c) => (c.id === configId ? (result.config as FetchConfig) : c))
+        )
+      }
+    } catch (err: any) {
+      flash(err.message || t('currencies.fetch.error_update_timezone'), 'error')
     }
   }, [t])
 
@@ -272,6 +333,23 @@ export default function CurrencyFetchingConfig() {
                       onChange={(e) => updateSyncTime(config.id, e.target.value)}
                       className="rounded border bg-background px-2 py-1.5 text-sm"
                     />
+                  </div>
+
+                  <div className="flex items-baseline gap-2">
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">
+                      {t('currencies.fetch.timezone')}:
+                    </label>
+                    <select
+                      value={config.timezone || browserTimezone}
+                      onChange={(e) => updateTimezone(config.id, e.target.value)}
+                      className="rounded border bg-background px-2 py-1.5 text-sm"
+                    >
+                      {timezoneOptions.map((tz) => (
+                        <option key={tz} value={tz}>
+                          {tz}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="flex items-baseline gap-2">

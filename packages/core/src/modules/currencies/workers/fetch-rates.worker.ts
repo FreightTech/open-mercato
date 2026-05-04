@@ -1,0 +1,77 @@
+import type { JobContext, QueuedJob, WorkerMeta } from '@open-mercato/queue'
+import type { EntityManager } from '@mikro-orm/core'
+import { CurrencyFetchConfig } from '../data/entities'
+import { RateFetchingService } from '../services/rateFetchingService'
+import { NBPProvider } from '../services/providers/nbp'
+import { RaiffeisenPolandProvider } from '../services/providers/raiffeisen'
+
+// Inlined to keep the metadata literal extractable by the module generator.
+// Must match FETCH_RATES_QUEUE_NAME in lib/fetchScheduleService.ts.
+export const metadata: WorkerMeta = {
+  queue: 'currencies-fetch-rates',
+  id: 'currencies-fetch-rates',
+  concurrency: 2,
+}
+
+export type FetchRatesPayload = {
+  configId: string
+  tenantId: string
+  organizationId: string
+  provider: string
+}
+
+type HandlerContext = JobContext & {
+  resolve: <T = unknown>(name: string) => T
+}
+
+export default async function handle(
+  job: QueuedJob<FetchRatesPayload>,
+  ctx: HandlerContext,
+): Promise<void> {
+  const em = ctx.resolve<EntityManager>('em')
+  const { configId, tenantId, organizationId, provider } = job.payload
+
+  const config = await em.findOne(CurrencyFetchConfig, {
+    id: configId,
+    tenantId,
+    organizationId,
+  })
+
+  if (!config || !config.isEnabled) {
+    return
+  }
+
+  let fetchService: RateFetchingService
+  try {
+    fetchService = ctx.resolve<RateFetchingService>('rateFetchingService')
+  } catch {
+    fetchService = new RateFetchingService(em)
+    fetchService.registerProvider(new NBPProvider())
+    fetchService.registerProvider(new RaiffeisenPolandProvider())
+  }
+
+  try {
+    const result = await fetchService.fetchRatesForDate(
+      new Date(),
+      { tenantId, organizationId },
+      { providers: [provider] },
+    )
+
+    config.lastSyncAt = new Date()
+    config.lastSyncCount = result.totalFetched
+    config.lastSyncStatus = result.errors.length > 0 ? 'partial' : 'success'
+    config.lastSyncMessage =
+      result.errors.length > 0
+        ? result.errors.join('; ')
+        : `Successfully synced ${result.totalFetched} rate(s)`
+
+    await em.persistAndFlush(config)
+  } catch (err: any) {
+    config.lastSyncAt = new Date()
+    config.lastSyncStatus = 'error'
+    config.lastSyncMessage = err?.message ?? 'Unknown error'
+    config.lastSyncCount = 0
+    await em.persistAndFlush(config)
+    throw err
+  }
+}

@@ -5,6 +5,7 @@ import {
   currencyFetchConfigCreateSchema,
   currencyFetchConfigUpdateSchema,
 } from '../data/validators'
+import type { CurrencyFetchScheduleService } from '../lib/fetchScheduleService'
 
 export interface FetchConfigCommandScope {
   tenantId: string
@@ -12,15 +13,18 @@ export interface FetchConfigCommandScope {
   userId?: string
 }
 
+export interface FetchConfigCommandDeps {
+  fetchScheduleService?: CurrencyFetchScheduleService
+}
+
 export async function createFetchConfig(
   em: EntityManager,
   input: z.infer<typeof currencyFetchConfigCreateSchema>,
-  scope: FetchConfigCommandScope
+  scope: FetchConfigCommandScope,
+  deps: FetchConfigCommandDeps = {},
 ): Promise<CurrencyFetchConfig> {
-  // Validate input
   const validated = currencyFetchConfigCreateSchema.parse(input)
 
-  // Check for duplicate provider
   const existing = await em.findOne(CurrencyFetchConfig, {
     organizationId: scope.organizationId,
     tenantId: scope.tenantId,
@@ -31,9 +35,9 @@ export async function createFetchConfig(
     throw new Error(`Provider ${validated.provider} already configured`)
   }
 
-  // Create config
   const config = em.create(CurrencyFetchConfig, {
     ...validated,
+    timezone: validated.timezone ?? 'UTC',
     organizationId: scope.organizationId,
     tenantId: scope.tenantId,
     createdAt: new Date(),
@@ -41,6 +45,9 @@ export async function createFetchConfig(
   })
 
   await em.persistAndFlush(config)
+
+  await deps.fetchScheduleService?.syncFromConfig(config)
+
   return config
 }
 
@@ -48,7 +55,8 @@ export async function updateFetchConfig(
   em: EntityManager,
   id: string,
   input: z.infer<typeof currencyFetchConfigUpdateSchema>,
-  scope: FetchConfigCommandScope
+  scope: FetchConfigCommandScope,
+  deps: FetchConfigCommandDeps = {},
 ): Promise<CurrencyFetchConfig> {
   const validated = currencyFetchConfigUpdateSchema.parse(input)
 
@@ -65,13 +73,16 @@ export async function updateFetchConfig(
   em.assign(config, validated)
   await em.persistAndFlush(config)
 
+  await deps.fetchScheduleService?.syncFromConfig(config)
+
   return config
 }
 
 export async function deleteFetchConfig(
   em: EntityManager,
   id: string,
-  scope: FetchConfigCommandScope
+  scope: FetchConfigCommandScope,
+  deps: FetchConfigCommandDeps = {},
 ): Promise<void> {
   const config = await em.findOne(CurrencyFetchConfig, {
     id,
@@ -82,6 +93,8 @@ export async function deleteFetchConfig(
   if (!config) {
     throw new Error('Fetch config not found')
   }
+
+  await deps.fetchScheduleService?.removeForConfig(config.id)
 
   await em.removeAndFlush(config)
 }

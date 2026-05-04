@@ -151,6 +151,10 @@ export class CurrencyFetchConfig {
   @Property({ name: 'sync_time', type: 'text', nullable: true })
   syncTime?: string | null // e.g., "09:00" for daily at 9 AM
 
+  // IANA timezone for syncTime (e.g. 'Europe/Warsaw'); the scheduler honors this when computing next run
+  @Property({ type: 'text', default: 'UTC' })
+  timezone: string = 'UTC'
+
   // Last sync tracking
   @Property({ name: 'last_sync_at', type: 'timestamptz', nullable: true })
   lastSyncAt?: Date | null

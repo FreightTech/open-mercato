@@ -40,6 +40,40 @@ When processing multi-currency transactions (e.g., sales invoice in EUR with USD
 5. On payment: calculate realized gain/loss from rate difference
 6. Report in both transaction and base currencies
 
+## Scheduling — Daily Rate Fetching
+
+When a `CurrencyFetchConfig` is enabled with a `syncTime` and `timezone`, the module
+upserts a row in `scheduled_jobs` (owned by `@open-mercato/scheduler`) that fires a
+job onto the `currencies-fetch-rates` queue every day at that local time.
+
+- **Wrapper service**: `lib/fetchScheduleService.ts` — `createFetchScheduleService(em, schedulerService?)`
+  exposes `syncFromConfig(config)`, `removeForConfig(configId)`, and `reconcile(scope)`.
+- **Decoupling**: scheduler is an OPTIONAL DI dependency. The wrapper imports nothing
+  from `@open-mercato/scheduler`; it interacts with whatever object is registered as
+  `schedulerService` and degrades to a no-op when none is registered.
+- **Schedule id**: deterministic — `stableUuidFromString('currencies:fetch-rates:' + config.id)`.
+  Re-running registration upserts the same row instead of duplicating.
+- **Cron mapping**: `syncTimeToCron('HH:MM')` → `'M H * * *'` (daily at HH:MM in the
+  config's timezone). The scheduler runs `calculateNextRun(cron, timezone)` itself.
+- **Worker**: `workers/fetch-rates.worker.ts` consumes `currencies-fetch-rates` with
+  payload `{ configId, tenantId, organizationId, provider }`. It bails when the config
+  is missing or `isEnabled === false`, then calls `RateFetchingService.fetchRatesForDate`
+  for the single provider and writes back `lastSync*` fields.
+- **Reconciliation**: `setup.ts seedDefaults` calls `reconcile()` on bootstrap so
+  pre-existing enabled configs get their schedules created when the scheduler module
+  becomes available. The `mercato currencies reconcile-schedules --tenant <id> --org <id>`
+  CLI provides a manual escape hatch.
+
+### Contract
+
+| Property | Value |
+|----------|-------|
+| Queue name | `currencies-fetch-rates` |
+| Required feature | `currencies.fetch.manage` |
+| Schedule scope | `organization` |
+| Source module | `currencies` |
+| Idempotency key | `stableUuidFromString('currencies:fetch-rates:' + configId)` |
+
 ## Database Constraints
 
 - Index on `(account_id, period_id, posting_date)` for fast lookups

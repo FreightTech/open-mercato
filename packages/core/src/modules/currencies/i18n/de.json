@@ -32,6 +32,8 @@
   "currencies.fetch.sync_no_rates": "Kein Kurs abgerufen. Sie haben keine Währungen definiert, bitte erstellen Sie die Paare, die Sie abrufen möchten",
   "currencies.fetch.sync_success": "Kurse erfolgreich abgerufen",
   "currencies.fetch.sync_time": "Tägliche Synchronisierungszeit",
+  "currencies.fetch.timezone": "Zeitzone",
+  "currencies.fetch.error_update_timezone": "Zeitzone konnte nicht aktualisiert werden",
   "currencies.fetch.title": "Währungskurs-Abruf",
   "currencies.flash.baseSet": "Basiswährung erfolgreich aktualisiert",
   "currencies.flash.baseSetError": "Basiswährung konnte nicht festgelegt werden",

@@ -32,6 +32,8 @@
   "currencies.fetch.sync_no_rates": "No se obtuvo ningún tipo. No tiene monedas definidas, por favor cree los pares que desea obtener",
   "currencies.fetch.sync_success": "Tipos obtenidos correctamente",
   "currencies.fetch.sync_time": "Hora de Sincronización Diaria",
+  "currencies.fetch.timezone": "Zona horaria",
+  "currencies.fetch.error_update_timezone": "Error al actualizar la zona horaria",
   "currencies.fetch.title": "Obtención de Tipos de Cambio",
   "currencies.flash.baseSet": "Moneda base actualizada correctamente",
   "currencies.flash.baseSetError": "Error al establecer moneda base",
