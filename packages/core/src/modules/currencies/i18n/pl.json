@@ -32,6 +32,8 @@
   "currencies.fetch.sync_no_rates": "Nie pobrano żadnego kursu. Nie masz zdefiniowanych walut, proszę utworzyć pary które chcesz pobrać",
   "currencies.fetch.sync_success": "Kursy pobrane pomyślnie",
   "currencies.fetch.sync_time": "Dzienna Godzina Synchronizacji",
+  "currencies.fetch.timezone": "Strefa czasowa",
+  "currencies.fetch.error_update_timezone": "Nie udało się zaktualizować strefy czasowej",
   "currencies.fetch.title": "Pobieranie Kursów Walut",
   "currencies.flash.baseSet": "Waluta bazowa zaktualizowana pomyślnie",
   "currencies.flash.baseSetError": "Nie udało się ustawić waluty bazowej",

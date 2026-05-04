@@ -146,18 +146,56 @@ export const syncTimeSchema = z
   .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Invalid time format. Use HH:MM')
   .nullable()
 
-export const currencyFetchConfigCreateSchema = z.object({
+const timezoneSchema = z
+  .string()
+  .min(1, 'Timezone is required')
+  .refine(
+    (tz) => {
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: tz })
+        return true
+      } catch {
+        return false
+      }
+    },
+    { message: 'Invalid IANA timezone' },
+  )
+
+// Base object schemas are exposed for OpenAPI / `.extend()` consumers.
+// Use the refined `*Schema` exports for runtime validation (commands).
+export const currencyFetchConfigCreateBaseSchema = z.object({
   provider: providerSchema,
   isEnabled: z.boolean().default(false),
   syncTime: syncTimeSchema.optional(),
+  timezone: timezoneSchema.optional(),
   config: z.record(z.string(), z.unknown()).nullable().optional(),
 })
 
-export const currencyFetchConfigUpdateSchema = z.object({
+export const currencyFetchConfigCreateSchema = currencyFetchConfigCreateBaseSchema.refine(
+  (data) => !data.isEnabled || !!data.syncTime,
+  {
+    message: 'syncTime is required when isEnabled is true',
+    path: ['syncTime'],
+  },
+)
+
+export const currencyFetchConfigUpdateBaseSchema = z.object({
   isEnabled: z.boolean().optional(),
   syncTime: syncTimeSchema.optional(),
+  timezone: timezoneSchema.optional(),
   config: z.record(z.string(), z.unknown()).nullable().optional(),
 })
+
+export const currencyFetchConfigUpdateSchema = currencyFetchConfigUpdateBaseSchema.refine(
+  (data) => {
+    if (data.isEnabled === true && data.syncTime === null) return false
+    return true
+  },
+  {
+    message: 'syncTime cannot be cleared while isEnabled is true',
+    path: ['syncTime'],
+  },
+)
 
 export type CurrencyFetchConfigCreateInput = z.infer<typeof currencyFetchConfigCreateSchema>
 export type CurrencyFetchConfigUpdateInput = z.infer<typeof currencyFetchConfigUpdateSchema>

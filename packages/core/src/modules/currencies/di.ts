@@ -4,6 +4,7 @@ import { RateFetchingService } from './services/rateFetchingService'
 import { ExchangeRateService } from './services/exchangeRateService'
 import { NBPProvider } from './services/providers/nbp'
 import { RaiffeisenPolandProvider } from './services/providers/raiffeisen'
+import { createFetchScheduleService } from './lib/fetchScheduleService'
 
 export function register(container: AppContainer) {
   container.register({
@@ -11,11 +12,11 @@ export function register(container: AppContainer) {
       resolve: (c) => {
         const em = c.resolve<EntityManager>('em')
         const service = new RateFetchingService(em)
-        
+
         // Register default providers
         service.registerProvider(new NBPProvider())
         service.registerProvider(new RaiffeisenPolandProvider())
-        
+
         return service
       },
     },
@@ -24,6 +25,15 @@ export function register(container: AppContainer) {
         const em = c.resolve<EntityManager>('em')
         const rateFetchingService = c.resolve<RateFetchingService>('rateFetchingService')
         return new ExchangeRateService(em, rateFetchingService)
+      },
+    },
+    currencyFetchScheduleService: {
+      resolve: (c) => {
+        const em = c.resolve<EntityManager>('em')
+        const scheduler = c.hasRegistration('schedulerService')
+          ? (c.resolve('schedulerService') as any)
+          : undefined
+        return createFetchScheduleService(em, scheduler)
       },
     },
   })

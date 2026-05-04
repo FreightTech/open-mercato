@@ -10,7 +10,11 @@ import {
   updateFetchConfig,
   deleteFetchConfig,
 } from '../../commands/fetch-configs'
-import { currencyFetchConfigCreateSchema, currencyFetchConfigUpdateSchema } from '../../data/validators'
+import type { CurrencyFetchScheduleService } from '../../lib/fetchScheduleService'
+import {
+  currencyFetchConfigCreateBaseSchema,
+  currencyFetchConfigUpdateBaseSchema,
+} from '../../data/validators'
 
 export const metadata = {
   requireAuth: true,
@@ -59,6 +63,9 @@ export async function POST(req: NextRequest) {
     }
 
     const em = container.resolve<EntityManager>('em')
+    const fetchScheduleService = container.resolve<CurrencyFetchScheduleService>(
+      'currencyFetchScheduleService',
+    )
 
     let body
     try {
@@ -67,11 +74,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
     }
 
-    const config = await createFetchConfig(em, body, {
-      tenantId: auth.tenantId,
-      organizationId: auth.orgId,
-      userId: auth.sub,
-    })
+    const config = await createFetchConfig(
+      em,
+      body,
+      {
+        tenantId: auth.tenantId,
+        organizationId: auth.orgId,
+        userId: auth.sub,
+      },
+      { fetchScheduleService },
+    )
 
     return NextResponse.json({ config }, { status: 201 })
   } catch (err: any) {
@@ -91,6 +103,9 @@ export async function PUT(req: NextRequest) {
     }
 
     const em = container.resolve<EntityManager>('em')
+    const fetchScheduleService = container.resolve<CurrencyFetchScheduleService>(
+      'currencyFetchScheduleService',
+    )
 
     let body
     try {
@@ -105,11 +120,17 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'ID required' }, { status: 400 })
     }
 
-    const config = await updateFetchConfig(em, id, data, {
-      tenantId: auth.tenantId,
-      organizationId: auth.orgId,
-      userId: auth.sub,
-    })
+    const config = await updateFetchConfig(
+      em,
+      id,
+      data,
+      {
+        tenantId: auth.tenantId,
+        organizationId: auth.orgId,
+        userId: auth.sub,
+      },
+      { fetchScheduleService },
+    )
 
     return NextResponse.json({ config })
   } catch (err: any) {
@@ -129,6 +150,9 @@ export async function DELETE(req: NextRequest) {
     }
 
     const em = container.resolve<EntityManager>('em')
+    const fetchScheduleService = container.resolve<CurrencyFetchScheduleService>(
+      'currencyFetchScheduleService',
+    )
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
 
@@ -136,11 +160,16 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'ID required' }, { status: 400 })
     }
 
-    await deleteFetchConfig(em, id, {
-      tenantId: auth.tenantId,
-      organizationId: auth.orgId,
-      userId: auth.sub,
-    })
+    await deleteFetchConfig(
+      em,
+      id,
+      {
+        tenantId: auth.tenantId,
+        organizationId: auth.orgId,
+        userId: auth.sub,
+      },
+      { fetchScheduleService },
+    )
 
     return NextResponse.json({ success: true })
   } catch (err: any) {
@@ -157,6 +186,7 @@ const fetchConfigItemSchema = z.object({
   provider: z.string(),
   isEnabled: z.boolean(),
   syncTime: z.string().nullable(),
+  timezone: z.string(),
   lastSyncAt: z.string().nullable().optional(),
   lastSyncStatus: z.string().nullable().optional(),
   lastSyncMessage: z.string().nullable().optional(),
@@ -194,7 +224,7 @@ export const openApi: OpenApiRouteDoc = {
       summary: 'Create currency fetch configuration',
       description: 'Creates a new currency fetch configuration.',
       requestBody: {
-        schema: currencyFetchConfigCreateSchema,
+        schema: currencyFetchConfigCreateBaseSchema,
         contentType: 'application/json',
       },
       responses: [
@@ -216,7 +246,7 @@ export const openApi: OpenApiRouteDoc = {
       summary: 'Update currency fetch configuration',
       description: 'Updates an existing currency fetch configuration by id.',
       requestBody: {
-        schema: currencyFetchConfigUpdateSchema.extend({
+        schema: currencyFetchConfigUpdateBaseSchema.extend({
           id: z.string().uuid(),
         }),
         contentType: 'application/json',

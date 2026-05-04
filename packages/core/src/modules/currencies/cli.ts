@@ -6,6 +6,7 @@ import { NBPProvider } from './services/providers/nbp'
 import { RaiffeisenPolandProvider } from './services/providers/raiffeisen'
 import { CurrencyFetchConfig } from './data/entities'
 import { seedExampleCurrencies } from './lib/seeds'
+import type { CurrencyFetchScheduleService } from './lib/fetchScheduleService'
 
 function parseArgs(args: string[]): Record<string, string | boolean> {
   const result: Record<string, string | boolean> = {}
@@ -214,4 +215,48 @@ const seed: ModuleCli = {
   },
 }
 
-export default [seed, fetchRatesCommand, listProvidersCommand]
+const reconcileSchedulesCommand: ModuleCli = {
+  command: 'reconcile-schedules',
+  async run(rest) {
+    const args = parseArgs(rest)
+    const tenantId = String(args.tenantId ?? args.tenant ?? '')
+    const organizationId = String(args.organizationId ?? args.org ?? '')
+
+    if (!tenantId || !organizationId) {
+      console.error(
+        'Usage: mercato currencies reconcile-schedules --tenant <id> --org <id>'
+      )
+      console.error(
+        'Re-registers ScheduledJob rows for every CurrencyFetchConfig in the given scope.'
+      )
+      return
+    }
+
+    const container = await createRequestContainer()
+
+    try {
+      if (!container.hasRegistration('schedulerService')) {
+        console.error(
+          '❌ schedulerService not registered. Enable the @open-mercato/scheduler module to use this command.'
+        )
+        process.exit(1)
+      }
+
+      const fetchScheduleService = container.resolve(
+        'currencyFetchScheduleService',
+      ) as CurrencyFetchScheduleService
+
+      const synced = await fetchScheduleService.reconcile({ tenantId, organizationId })
+      console.log(
+        `✅ Reconciled ${synced} currency fetch schedule(s) for tenant=${tenantId} org=${organizationId}`,
+      )
+    } catch (err: any) {
+      console.error('❌ Error:', err.message)
+      process.exit(1)
+    } finally {
+      await (container as any).dispose?.()
+    }
+  },
+}
+
+export default [seed, fetchRatesCommand, listProvidersCommand, reconcileSchedulesCommand]

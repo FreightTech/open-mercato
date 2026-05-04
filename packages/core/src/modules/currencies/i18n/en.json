@@ -32,6 +32,8 @@
   "currencies.fetch.sync_no_rates": "No rate fetched. You've got no currencies defined, please create the pairs you want to fetch",
   "currencies.fetch.sync_success": "Rates fetched successfully",
   "currencies.fetch.sync_time": "Daily Sync Time",
+  "currencies.fetch.timezone": "Timezone",
+  "currencies.fetch.error_update_timezone": "Failed to update timezone",
   "currencies.fetch.title": "Currency Rate Fetching",
   "currencies.flash.baseSet": "Base currency updated successfully",
   "currencies.flash.baseSetError": "Failed to set base currency",

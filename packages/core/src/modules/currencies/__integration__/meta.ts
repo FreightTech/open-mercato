@@ -1,3 +1,3 @@
 export const integrationMeta = {
-  dependsOnModules: ['currencies'],
+  dependsOnModules: ['currencies', 'scheduler'],
 };
