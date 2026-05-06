@@ -36,6 +36,7 @@ import type {
 import type {
   PerspectivesIndexResponse,
   PerspectiveDto,
+  PerspectiveSaveResponse,
 } from '@open-mercato/shared/modules/perspectives/types'
 
 // ─── Config Types ────────────────────────────
@@ -452,7 +453,7 @@ export function useDynamicTablePage<TRow = any>(
       const existingPerspective = savedPerspectives.find(
         (p) => p.name === payload.perspective.name
       )
-      const response = await apiCall(`/api/perspectives/${perspectivesTableId}`, {
+      const response = await apiCall<PerspectiveSaveResponse>(`/api/perspectives/${perspectivesTableId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -464,6 +465,8 @@ export function useDynamicTablePage<TRow = any>(
       if (response.ok) {
         flash('Perspective saved', 'success')
         queryClient.invalidateQueries({ queryKey: ['perspectives', perspectivesTableId] })
+        const savedId = response.result?.perspective?.id
+        if (savedId) setActivePerspectiveId(savedId)
       } else {
         flash('Failed to save perspective', 'error')
       }
