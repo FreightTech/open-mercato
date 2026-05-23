@@ -1,13 +1,5 @@
-import {
-  Collection,
-  Entity,
-  Index,
-  ManyToOne,
-  OneToMany,
-  OptionalProps,
-  PrimaryKey,
-  Property,
-} from '@mikro-orm/core'
+import { Collection, OptionalProps } from '@mikro-orm/core'
+import { Entity, Index, ManyToOne, OneToMany, PrimaryKey, Property } from '@mikro-orm/decorators/legacy'
 import type { InvoiceStatus, ExtractionConfidence, InvoiceType, CostAllocationStatus } from './invoice-types'
 import type { DocumentType, TransportationMetadata } from './schema-types'
 import type { ProcessingStatus, ConsensusRecommendation } from '../services/pipeline/types'

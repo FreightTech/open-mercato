@@ -11,6 +11,10 @@ import Link from 'next/link'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
+import { Tenant, Organization } from '@open-mercato/core/modules/directory/data/entities'
+import { buildHomeQuickLinks } from '@/lib/homeQuickLinks'
+import { Fragment } from 'react'
 
 function FeatureBadge({ label }: { label: string }) {
   return (
@@ -46,11 +50,14 @@ for (const route of apiRoutes) {
 
 export default async function Home() {
   const { t } = await resolveTranslations()
-
+  const quickLinks = buildHomeQuickLinks(modules)
+  
+  // Check if user wants to see the start page
   const cookieStore = await cookies()
   const showStartPageCookie = cookieStore.get('show_start_page')
   const showStartPage = showStartPageCookie?.value !== 'false'
 
+  // Database status and counts
   let dbStatus = t('app.page.dbStatus.unknown', 'Unknown')
   let usersCount = 0
   let tenantsCount = 0
@@ -58,9 +65,9 @@ export default async function Home() {
   try {
     const container = await createRequestContainer()
     const em = container.resolve<EntityManager>('em')
-    usersCount = await em.count('User', {})
-    tenantsCount = await em.count('Tenant', {})
-    orgsCount = await em.count('Organization', {})
+    usersCount = await em.count(User, {})
+    tenantsCount = await em.count(Tenant, {})
+    orgsCount = await em.count(Organization, {})
     dbStatus = t('app.page.dbStatus.connected', 'Connected')
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : t('app.page.dbStatus.noConnection', 'no connection')
@@ -84,7 +91,7 @@ export default async function Home() {
         />
         <div className="flex-1">
           <h1 className="text-3xl font-semibold tracking-tight">{t('app.page.title', 'Open Mercato')}</h1>
-          <p className="text-sm text-muted-foreground">{t('app.page.subtitle', 'AI-supportive, modular ERP foundation for product & service companies')}</p>
+          <p className="text-sm text-muted-foreground">{t('app.page.subtitle', 'AI‑supportive, modular ERP foundation for product & service companies')}</p>
         </div>
       </header>
 
@@ -139,15 +146,14 @@ export default async function Home() {
       <section className="rounded-lg border bg-card p-4">
         <div className="text-sm font-medium mb-2">{t('app.page.quickLinks.title', 'Quick Links')}</div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <Link className="underline hover:text-primary transition-colors" href="/login">{t('app.page.quickLinks.login', 'Login')}</Link>
-          <span className="text-muted-foreground">·</span>
-          <Link className="underline hover:text-primary transition-colors" href="/example">{t('app.page.quickLinks.examplePage', 'Example Page')}</Link>
-          <span className="text-muted-foreground">·</span>
-          <Link className="underline hover:text-primary transition-colors" href="/backend/example">{t('app.page.quickLinks.exampleAdmin', 'Example Admin')}</Link>
-          <span className="text-muted-foreground">·</span>
-          <Link className="underline hover:text-primary transition-colors" href="/backend/todos">{t('app.page.quickLinks.exampleTodos', 'Example Todos with Custom Fields')}</Link>
-          <span className="text-muted-foreground">·</span>
-          <Link className="underline hover:text-primary transition-colors" href="/blog/123">{t('app.page.quickLinks.exampleBlog', 'Example Blog Post')}</Link>
+          {quickLinks.map((link, index) => (
+            <Fragment key={link.href}>
+              {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+              <Link className="underline hover:text-primary transition-colors" href={link.href}>
+                {t(link.translationKey, link.fallbackLabel)}
+              </Link>
+            </Fragment>
+          ))}
         </div>
       </section>
 

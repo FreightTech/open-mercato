@@ -8,6 +8,11 @@ AI-powered chat and tool execution for Open Mercato, using MCP (Model Context Pr
 - **MCP Server**: Exposes platform tools to AI agents via Model Context Protocol
 - **API Discovery**: Meta-tools (`api_discover`, `api_execute`, `api_schema`) for dynamic API access
 - **OpenCode Integration**: Go-based AI backend for processing requests and executing tools
+- **Typed Agent Framework** *(new — 2026-04-18)*: `AiAgentDefinition` + `defineAiTool()`, generated `ai-agents.generated.ts` discovery, dispatcher route `POST /api/ai_assistant/ai/chat?agent=<module>.<agent>`, AI SDK helpers (`createAiAgentTransport`, `runAiAgentText`, `runAiAgentObject`), attachment bridge, and tool packs for customers + catalog — see the spec at [`.ai/specs/implemented/2026-04-11-unified-ai-tooling-and-subagents.md`](../../.ai/specs/implemented/2026-04-11-unified-ai-tooling-and-subagents.md)
+- **Mutation Approval Gate (D16)** *(new — 2026-04-18)*: additive `ai_pending_actions` table, `prepareMutation` runtime wrapper, three pending-action routes (`GET` / `confirm` / `cancel`), four new UI parts (`mutation-preview-card`, `field-diff-card`, `confirmation-card`, `mutation-result-card`), typed `ai.action.{confirmed,cancelled,expired}` events, and a cleanup worker for expired approvals — see the **Upgrading / Operator rollout notes** section in [`AGENTS.md`](./AGENTS.md)
+- **Playground + Settings**: `/backend/config/ai-assistant/playground` (agent picker + debug + object-mode) and `/backend/config/ai-assistant/agents` (versioned prompt overrides + feature-gated `mutationPolicy`)
+
+Both stacks coexist: OpenCode Code Mode keeps powering the Command Palette and `/api/chat` unchanged; the new typed framework adds focused, mutation-capable agents alongside it.
 
 ## Quick Start
 
@@ -115,22 +120,82 @@ curl http://localhost:4096/mcp
 | `ANTHROPIC_API_KEY` | If using Anthropic | - | Anthropic API key |
 | `OPENAI_API_KEY` | If using OpenAI | - | OpenAI API key |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | If using Google | - | Google Generative AI API key |
-| `OPENCODE_PROVIDER` | Yes | - | LLM provider: `anthropic`, `openai`, or `google` |
+| `DEEPINFRA_API_KEY` | If using DeepInfra | - | DeepInfra API key (OpenAI-compatible preset) |
+| `GROQ_API_KEY` | If using Groq | - | Groq API key (OpenAI-compatible preset) |
+| `TOGETHER_API_KEY` | If using Together | - | Together AI API key |
+| `FIREWORKS_API_KEY` | If using Fireworks | - | Fireworks AI API key |
+| `AZURE_OPENAI_API_KEY` | If using Azure | - | Azure OpenAI API key |
+| `AZURE_OPENAI_BASE_URL` | If using Azure | - | Azure deployment URL |
+| `LITELLM_API_KEY` | If using LiteLLM | - | LiteLLM proxy API key |
+| `LITELLM_BASE_URL` | If using LiteLLM | `http://localhost:4000/v1` | LiteLLM proxy URL |
+| `OLLAMA_API_KEY` | If using Ollama | `ollama` | Ollama API key (usually `ollama`) |
+| `OLLAMA_BASE_URL` | If using Ollama | `http://localhost:11434/v1` | Ollama local URL |
+| `OPENCODE_PROVIDER` | Yes | - | LLM provider id (any registered provider, see below) |
 | `OPENCODE_MODEL` | No | See table below | Override the model for selected provider |
 | `MCP_SERVER_API_KEY` | For production | - | Open Mercato API key (`omk_...`) for MCP server auth |
 | `MCP_DEV_PORT` | No | `3001` | Port for development MCP server |
 | `MCP_DEBUG` | No | `false` | Enable debug logging |
 | `OPENCODE_URL` | No | `http://localhost:4096` | OpenCode server URL |
 
-### Models by Provider
+### Built-in Providers
 
-If `OPENCODE_MODEL` is not set, these models are used:
+The registry ships 10 built-in providers via the ports & adapters
+architecture (see [`.ai/specs/2026-04-14-llm-provider-ports-and-adapters.md`](../../.ai/specs/2026-04-14-llm-provider-ports-and-adapters.md)).
 
-| Provider | Model | Context Window |
-|----------|---------------|----------------|
-| `anthropic` | `claude-haiku-4-5-20251001` | 200K tokens |
-| `openai` | `gpt-5-mini` | 128K tokens |
-| `google` | `gemini-3-flash-preview` | 1M tokens |
+Native protocol adapters:
+
+| Provider id | SDK | Default model | Context |
+|-------------|-----|---------------|---------|
+| `anthropic` | `@ai-sdk/anthropic` | `claude-haiku-4-5-20251001` | 200K |
+| `google` | `@ai-sdk/google` | `gemini-3-flash` | 1M |
+
+OpenAI-compatible presets (all share one protocol adapter with different
+`baseURL` and env keys):
+
+| Provider id | Base URL | Default model | Context |
+|-------------|----------|---------------|---------|
+| `openai` | `api.openai.com` | `gpt-5-mini` | 128K |
+| `deepinfra` | `api.deepinfra.com/v1/openai` | `zai-org/GLM-5.1` | 202K |
+| `groq` | `api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | 131K |
+| `together` | `api.together.xyz/v1` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | 131K |
+| `fireworks` | `api.fireworks.ai/inference/v1` | `llama-v3p3-70b-instruct` | 131K |
+| `azure` | `$AZURE_OPENAI_BASE_URL` | `gpt-5-mini` | 128K |
+| `litellm` | `$LITELLM_BASE_URL` | `gpt-4o-mini` | 128K |
+| `ollama` | `$OLLAMA_BASE_URL` | `llama3.3` | 131K |
+
+DeepInfra preset ships a curated model catalog including `GLM-5.1`,
+`GLM-4.7-Flash`, `Qwen3-235B-A22B-Instruct-2507`,
+`Llama-4-Scout-17B-16E-Instruct`, `DeepSeek-V3.2-Exp`, and
+`Qwen3-Coder-30B-A3B-Instruct`.
+
+### Extending with Custom Providers
+
+Downstream applications can register their own providers at bootstrap
+time without forking this package. Example adding a custom LiteLLM
+proxy that routes to multiple upstream backends:
+
+```ts
+// src/bootstrap.ts (downstream app)
+import { llmProviderRegistry } from '@open-mercato/shared/lib/ai/llm-provider-registry'
+import { createOpenAICompatibleProvider } from '@open-mercato/ai-assistant/modules/ai_assistant/lib/llm-adapters/openai'
+
+llmProviderRegistry.register(
+  createOpenAICompatibleProvider({
+    id: 'internal-litellm',
+    name: 'Internal LiteLLM',
+    baseURL: process.env.INTERNAL_LITELLM_URL!,
+    envKeys: ['INTERNAL_LITELLM_KEY'],
+    defaultModel: 'internal/gpt-5',
+    defaultModels: [
+      { id: 'internal/gpt-5', name: 'GPT-5 (internal)', contextWindow: 128000 },
+    ],
+  }),
+)
+```
+
+The custom provider is immediately available under its id in
+`OPENCODE_PROVIDER`, the backend settings dropdown, and the routing
+layer — no changes needed in core.
 
 ### .mcp.json Configuration
 
@@ -447,7 +512,8 @@ packages/ai-assistant/
 │   │   ├── lib/
 │   │   │   ├── opencode-client.ts      # OpenCode API client
 │   │   │   ├── opencode-handlers.ts    # Request handlers
-│   │   │   ├── api-discovery-tools.ts  # api_discover, api_execute, api_schema
+│   │   │   ├── codemode-tools.ts       # Code Mode meta-tools (search + execute)
+│   │   │   ├── api-endpoint-index.ts   # OpenAPI parsing + raw spec cache
 │   │   │   ├── http-server.ts          # MCP HTTP server
 │   │   │   ├── mcp-dev-server.ts       # Development MCP server
 │   │   │   └── tool-registry.ts        # Tool registration

@@ -263,7 +263,7 @@ export function makeDynamicTableRoute<TEntity = any, TRow = any>(
     }
 
     const entity = ctx.em.create(orm.entity, entityData)
-    await ctx.em.persistAndFlush(entity)
+    await ctx.em.persist(entity).flush()
 
     const idField = orm.idField || 'id'
     return NextResponse.json({
@@ -367,7 +367,7 @@ export function makeDynamicTableRoute<TEntity = any, TRow = any>(
       }
       await ctx.em.flush()
     } else {
-      await ctx.em.removeAndFlush(entity)
+      await ctx.em.remove(entity).flush()
     }
 
     return NextResponse.json({ success: true })

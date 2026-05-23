@@ -13,6 +13,8 @@ import { rateLimitErrorSchema } from '@open-mercato/shared/lib/ratelimit/helpers
 import { readEndpointRateLimitConfig } from '@open-mercato/shared/lib/ratelimit/config'
 import { checkAuthRateLimit, resetAuthRateLimit } from '@open-mercato/core/modules/auth/lib/rateLimitCheck'
 import { runCustomRouteAfterInterceptors } from '@open-mercato/shared/lib/crud/custom-route-interceptor'
+import { sanitizeRedirectPath } from '@open-mercato/core/modules/auth/lib/safeRedirect'
+import { getAppBaseUrl } from '@open-mercato/shared/lib/url'
 
 const loginRateLimitConfig = readEndpointRateLimitConfig('LOGIN', {
   points: 5, duration: 60, blockDuration: 60, keyPrefix: 'login',
@@ -21,7 +23,7 @@ const loginIpRateLimitConfig = readEndpointRateLimitConfig('LOGIN_IP', {
   points: 20, duration: 60, blockDuration: 60, keyPrefix: 'login-ip',
 })
 
-export const metadata = {}
+export const metadata = { requireAuth: false }
 
 // validation comes from userLoginSchema
 
@@ -31,6 +33,7 @@ type ParsedLoginForm = {
   remember: boolean
   tenantIdRaw: string
   requiredRoles: string[]
+  redirectTo: string
 }
 
 function parseRequiredRoles(rawValue: string): string[] {
@@ -55,6 +58,7 @@ async function parseLoginForm(req: Request): Promise<ParsedLoginForm> {
         remember: parseBooleanToken(params.get('remember')) === true,
         tenantIdRaw: String(params.get('tenantId') ?? params.get('tenant') ?? '').trim(),
         requiredRoles: requireRoleRaw ? parseRequiredRoles(requireRoleRaw) : [],
+        redirectTo: String(params.get('redirect') ?? ''),
       }
     }
 
@@ -66,6 +70,7 @@ async function parseLoginForm(req: Request): Promise<ParsedLoginForm> {
       remember: parseBooleanToken(form.get('remember')?.toString()) === true,
       tenantIdRaw: String(form.get('tenantId') ?? form.get('tenant') ?? '').trim(),
       requiredRoles: requireRoleRaw ? parseRequiredRoles(requireRoleRaw) : [],
+      redirectTo: String(form.get('redirect') ?? ''),
     }
   } catch {
     return {
@@ -74,13 +79,14 @@ async function parseLoginForm(req: Request): Promise<ParsedLoginForm> {
       remember: false,
       tenantIdRaw: '',
       requiredRoles: [],
+      redirectTo: '',
     }
   }
 }
 
 export async function POST(req: Request) {
   const { translate } = await resolveTranslations()
-  const { email, password, remember, tenantIdRaw, requiredRoles } = await parseLoginForm(req)
+  const { email, password, remember, tenantIdRaw, requiredRoles, redirectTo } = await parseLoginForm(req)
   // Rate limit — two layers, both checked before validation and DB work
   const { error: rateLimitError, compoundKey: rateLimitCompoundKey } = await checkAuthRateLimit({
     req, ipConfig: loginIpRateLimitConfig, compoundConfig: loginRateLimitConfig, compoundIdentifier: email,
@@ -160,7 +166,7 @@ export async function POST(req: Request) {
   const responseData: { ok: true; token: string; redirect: string; refreshToken?: string } = {
     ok: true,
     token,
-    redirect: '/backend',
+    redirect: sanitizeRedirectPath(redirectTo, getAppBaseUrl(req), '/backend'),
   }
   if (remember) {
     responseData.refreshToken = sessionRefreshToken

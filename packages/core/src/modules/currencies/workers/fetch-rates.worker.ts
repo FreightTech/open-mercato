@@ -60,13 +60,13 @@ export default async function handle(
         ? result.errors.join('; ')
         : `Successfully synced ${result.totalFetched} rate(s)`
 
-    await em.persistAndFlush(config)
+    await em.persist(config).flush()
   } catch (err: any) {
     config.lastSyncAt = new Date()
     config.lastSyncStatus = 'error'
     config.lastSyncMessage = err?.message ?? 'Unknown error'
     config.lastSyncCount = 0
-    await em.persistAndFlush(config)
+    await em.persist(config).flush()
     throw err
   }
 }

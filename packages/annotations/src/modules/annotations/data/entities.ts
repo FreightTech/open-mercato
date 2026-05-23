@@ -1,14 +1,5 @@
-import {
-  Entity,
-  PrimaryKey,
-  Property,
-  Index,
-  Unique,
-  ManyToOne,
-  OneToMany,
-  Collection,
-  OptionalProps,
-} from '@mikro-orm/core'
+import { Collection, OptionalProps } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, Index, Unique, ManyToOne, OneToMany } from '@mikro-orm/decorators/legacy'
 
 export type CellAnnotationColor = 'gray' | 'pink' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple'
 

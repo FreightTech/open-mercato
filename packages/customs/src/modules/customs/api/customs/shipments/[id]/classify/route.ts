@@ -69,7 +69,7 @@ export async function POST(req: Request, context: { params: Record<string, strin
   })
 
   const classifications = await Promise.all(classificationPromises)
-  await em.persistAndFlush(classifications)
+  await em.persist(classifications).flush()
 
   return NextResponse.json({
     classifications: classifications.map((classification) => ({

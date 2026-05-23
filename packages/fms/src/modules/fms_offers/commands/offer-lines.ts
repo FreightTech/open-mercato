@@ -132,7 +132,7 @@ const createOfferLineCommand: CommandHandler<FmsOfferLineCreateInput, { lineId: 
       updatedAt: now,
     })
 
-    await em.persistAndFlush(line)
+    await em.persist(line).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

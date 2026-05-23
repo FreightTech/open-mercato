@@ -1,4 +1,5 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { sql } from 'kysely'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import {
@@ -132,18 +133,16 @@ export class FmsInvoicingService {
       })
     }
 
-    const knex = em.getKnex()
+    const db = em.getKysely<any>()
 
-    const sourceRows = await knex.raw<{ rows: DocumentInvoiceRow[] }>(
-      `SELECT id, invoice_number, invoice_date, due_date, service_date,
-              seller_name, seller_tax_id, seller_address,
-              buyer_name, buyer_tax_id, buyer_address,
-              net_amount, vat_amount, gross_amount, currency_code,
-              document_id, attachment_id
-       FROM fms_invoices
-       WHERE id = ? AND organization_id = ? AND tenant_id = ? AND deleted_at IS NULL`,
-      [params.sourceInvoiceId, params.organizationId, params.tenantId]
-    )
+    const sourceRows = await sql<DocumentInvoiceRow>`
+      SELECT id, invoice_number, invoice_date, due_date, service_date,
+             seller_name, seller_tax_id, seller_address,
+             buyer_name, buyer_tax_id, buyer_address,
+             net_amount, vat_amount, gross_amount, currency_code,
+             document_id, attachment_id
+      FROM fms_invoices
+      WHERE id = ${params.sourceInvoiceId} AND organization_id = ${params.organizationId} AND tenant_id = ${params.tenantId} AND deleted_at IS NULL`.execute(db)
 
     const source = sourceRows.rows[0]
     if (!source) {
@@ -178,14 +177,12 @@ export class FmsInvoicingService {
     em.persist(invoice)
     await em.flush()
 
-    const lineItemRows = await knex.raw<{ rows: DocumentLineItemRow[] }>(
-      `SELECT id, description, quantity, unit, unit_price_net, vat_rate,
-              net_amount, vat_amount, gross_amount
-       FROM fms_invoice_line_items
-       WHERE invoice_id = ? AND organization_id = ? AND tenant_id = ?
-       ORDER BY line_number ASC`,
-      [params.sourceInvoiceId, params.organizationId, params.tenantId]
-    )
+    const lineItemRows = await sql<DocumentLineItemRow>`
+      SELECT id, description, quantity, unit, unit_price_net, vat_rate,
+             net_amount, vat_amount, gross_amount
+      FROM fms_invoice_line_items
+      WHERE invoice_id = ${params.sourceInvoiceId} AND organization_id = ${params.organizationId} AND tenant_id = ${params.tenantId}
+      ORDER BY line_number ASC`.execute(db)
 
     for (let idx = 0; idx < lineItemRows.rows.length; idx++) {
       const row = lineItemRows.rows[idx]
@@ -228,17 +225,15 @@ export class FmsInvoicingService {
       })
     }
 
-    const knex = em.getKnex()
+    const db = em.getKysely<any>()
 
-    const sourceRows = await knex.raw<{ rows: SalesInvoiceRow[] }>(
-      `SELECT id, document_number, issue_date, due_date, service_date,
-              seller_name, seller_tax_id, seller_address,
-              buyer_name, buyer_tax_id, buyer_address,
-              net_total, vat_total, gross_total, currency_code, payment_method
-       FROM sales_invoices
-       WHERE id = ? AND organization_id = ? AND tenant_id = ?`,
-      [params.salesInvoiceId, params.organizationId, params.tenantId]
-    )
+    const sourceRows = await sql<SalesInvoiceRow>`
+      SELECT id, document_number, issue_date, due_date, service_date,
+             seller_name, seller_tax_id, seller_address,
+             buyer_name, buyer_tax_id, buyer_address,
+             net_total, vat_total, gross_total, currency_code, payment_method
+      FROM sales_invoices
+      WHERE id = ${params.salesInvoiceId} AND organization_id = ${params.organizationId} AND tenant_id = ${params.tenantId}`.execute(db)
 
     const source = sourceRows.rows[0]
     if (!source) {
@@ -272,14 +267,12 @@ export class FmsInvoicingService {
     em.persist(invoice)
     await em.flush()
 
-    const lineItemRows = await knex.raw<{ rows: SalesLineItemRow[] }>(
-      `SELECT name, description, quantity, unit, unit_price,
-              vat_rate, net_amount, vat_amount, gross_amount
-       FROM sales_invoice_lines
-       WHERE invoice_id = ? AND organization_id = ? AND tenant_id = ?
-       ORDER BY position ASC`,
-      [params.salesInvoiceId, params.organizationId, params.tenantId]
-    )
+    const lineItemRows = await sql<SalesLineItemRow>`
+      SELECT name, description, quantity, unit, unit_price,
+             vat_rate, net_amount, vat_amount, gross_amount
+      FROM sales_invoice_lines
+      WHERE invoice_id = ${params.salesInvoiceId} AND organization_id = ${params.organizationId} AND tenant_id = ${params.tenantId}
+      ORDER BY position ASC`.execute(db)
 
     for (let idx = 0; idx < lineItemRows.rows.length; idx++) {
       const row = lineItemRows.rows[idx]

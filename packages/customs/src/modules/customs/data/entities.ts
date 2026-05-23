@@ -1,12 +1,5 @@
-import {
-  Entity,
-  PrimaryKey,
-  Property,
-  ManyToOne,
-  OneToMany,
-  Collection,
-  Index,
-} from '@mikro-orm/core'
+import { Collection } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, ManyToOne, OneToMany, Index } from '@mikro-orm/decorators/legacy'
 
 // ── Shared interfaces (used in JSON columns) ────────────────────────
 

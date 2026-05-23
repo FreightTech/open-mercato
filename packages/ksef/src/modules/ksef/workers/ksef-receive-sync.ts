@@ -290,7 +290,7 @@ async function importReceivedInvoice(
     if (existing.ksefInvoiceId) {
       return false
     }
-    await em.removeAndFlush(existing)
+    await em.remove(existing).flush()
   }
 
   // Download full invoice XML (v2 returns raw XML, v1 returned JSON with base64)

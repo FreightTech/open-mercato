@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
     const container = await createRequestContainer()
     const em = container.resolve('em') as EntityManager
-    const metadata = em.getMetadata().get(Contractor.name)
+    const metadata = em.getMetadata().get(Contractor.name as any)
 
     const columns = generateTableConfig(metadata, CONTRACTOR_DISPLAY_HINTS)
 

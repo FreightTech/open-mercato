@@ -1,4 +1,5 @@
-import { Entity, OptionalProps, PrimaryKey, Property, Unique } from '@mikro-orm/core'
+import { OptionalProps } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, Unique } from '@mikro-orm/decorators/legacy'
 
 // Admin settings
 @Entity({ tableName: 'fms_tracking_freighttech_settings' })

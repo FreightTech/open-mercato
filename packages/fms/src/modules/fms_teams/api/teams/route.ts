@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { NextRequest, NextResponse } from 'next/server'
+import { sql } from 'kysely'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
@@ -49,37 +50,32 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit
 
   const em = container.resolve('em') as EntityManager
-  const knex = (em.getConnection() as unknown as { getKnex(): import('knex').Knex }).getKnex()
+  const db = em.getKysely<any>()
 
   // Build base query
-  let baseQuery = knex('fms_teams as t')
-    .where('t.organization_id', organizationId)
-    .where('t.tenant_id', tenantId)
-    .whereNull('t.deleted_at')
+  const baseQuery = () => {
+    let qb = db.selectFrom('fms_teams as t')
+      .where('t.organization_id', '=', organizationId)
+      .where('t.tenant_id', '=', tenantId)
+      .where('t.deleted_at', 'is', null)
 
-  // Apply search filter
-  if (query.search) {
-    const pattern = `%${escapeLikePattern(query.search)}%`
-    baseQuery = baseQuery.where('t.name', 'ilike', pattern)
-  }
+    // Apply search filter
+    if (query.search) {
+      const pattern = `%${escapeLikePattern(query.search)}%`
+      qb = qb.where('t.name', 'ilike', pattern)
+    }
 
-  // Apply isActive filter
-  if (typeof query.isActive === 'boolean') {
-    baseQuery = baseQuery.where('t.is_active', query.isActive)
+    // Apply isActive filter
+    if (typeof query.isActive === 'boolean') {
+      qb = qb.where('t.is_active', '=', query.isActive)
+    }
+
+    return qb
   }
 
   // Get total count
-  const countResult = await baseQuery.clone().count('* as count').first()
+  const countResult = await baseQuery().select(({ fn }) => fn.countAll().as('count')).executeTakeFirst()
   const total = Number(countResult?.count ?? 0)
-
-  // Get member counts per team
-  const memberCountsQuery = knex('fms_user_teams')
-    .select('team_id')
-    .count('* as member_count')
-    .where('organization_id', organizationId)
-    .whereNotNull('team_id')
-    .groupBy('team_id')
-    .as('mc')
 
   // Apply sorting
   const sortField = query.sortField || query.sortBy || 'name'
@@ -92,19 +88,28 @@ export async function GET(request: NextRequest) {
   const sortColumn = sortFieldMap[sortField] || 't.name'
 
   // Get teams with member count
-  const rows = await baseQuery
-    .clone()
-    .select(
+  const rows = await baseQuery()
+    .leftJoin(
+      (eb) => eb
+        .selectFrom('fms_user_teams')
+        .select(['team_id', (b) => b.fn.countAll().as('member_count')])
+        .where('organization_id', '=', organizationId)
+        .where('team_id', 'is not', null)
+        .groupBy('team_id')
+        .as('mc'),
+      (join) => join.onRef('mc.team_id', '=', 't.id')
+    )
+    .select([
       't.id',
       't.name',
       't.is_active as isActive',
       't.created_at as createdAt',
-      knex.raw('COALESCE(mc.member_count, 0)::int as "memberCount"')
-    )
-    .leftJoin(memberCountsQuery, 'mc.team_id', 't.id')
-    .orderBy(sortColumn, sortDir)
+      sql<number>`COALESCE(mc.member_count, 0)::int`.as('memberCount'),
+    ])
+    .orderBy(sortColumn, sortDir as 'asc' | 'desc')
     .limit(limit)
     .offset(offset)
+    .execute()
 
   const items = rows.map((row) => ({
     id: row.id,

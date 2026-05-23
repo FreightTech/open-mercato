@@ -1,9 +1,66 @@
 // Central place to enable modules and their source.
 // - id: module id (plural snake_case; special cases: 'auth')
 // - from: '@open-mercato/core' | '@app' | custom alias/path in future
+// - overrides: optional unified per-app override surface — replace or
+//   disable any contract a module presents: AI, routes, events, workers,
+//   widgets, notifications, interceptors, setup, ACL, DI, encryption, etc.
+//   See `.ai/specs/2026-05-04-modules-ts-unified-overrides.md` and
+//   `apps/docs/docs/framework/modules/overrides.mdx`.
 import { parseBooleanWithDefault } from '@open-mercato/shared/lib/boolean'
+import type { ModuleOverrides } from '@open-mercato/shared/modules/overrides'
+import { officialModuleEntries } from './official-modules.generated'
 
-export type ModuleEntry = { id: string; from?: '@open-mercato/core' | '@app' | string }
+export type ModuleEntry = {
+  id: string
+  from?: '@open-mercato/core' | '@app' | string
+  overrides?: ModuleOverrides
+}
+
+/**
+ * Copyable examples for every wired `entry.overrides` domain.
+ *
+ * This object is intentionally not assigned to any enabled module. Use it as
+ * a reference when a downstream app needs to disable or replace contracts
+ * from a package-backed module without editing that module's source.
+ */
+export const moduleOverrideExamples: ModuleOverrides = {
+  ai: {
+    agents: { 'catalog.catalog_assistant': null },
+    tools: { inbox_ops_accept_action: null },
+  },
+  routes: {
+    api: { 'DELETE /api/example/items': null },
+    pages: { '/backend/example/reports': null },
+  },
+  events: {
+    subscribers: { 'example.todo.audit': null },
+  },
+  workers: { 'example:sync': null },
+  widgets: {
+    injection: { 'example.sidebar': null },
+    components: { 'page:/backend/example': null },
+    dashboard: { 'example.kpi': null },
+  },
+  notifications: {
+    types: { 'example.notice': null },
+    handlers: { 'example.notice.toast': null },
+  },
+  interceptors: { 'example.items.interceptor': null },
+  commandInterceptors: { 'example.command.interceptor': null },
+  enrichers: { 'example.items.enricher': null },
+  guards: { 'example.backend.guard': null },
+  cli: { 'example seed': null },
+  setup: {
+    seedExamples: false,
+  },
+  acl: {
+    features: { 'example.manage': null },
+  },
+  di: { exampleService: null },
+  encryption: {
+    maps: { 'example:item': null },
+  },
+}
 
 export const enabledModules: ModuleEntry[] = [
   { id: 'dashboards', from: '@open-mercato/core' },
@@ -18,64 +75,29 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'attachments', from: '@open-mercato/core' },
   { id: 'catalog', from: '@open-mercato/core' },
   { id: 'sales', from: '@open-mercato/core' },
-  // { id: 'example', from: '@open-mercato/example' },
   { id: 'api_keys', from: '@open-mercato/core' },
   { id: 'dictionaries', from: '@open-mercato/core' },
   { id: 'content', from: '@open-mercato/content' },
   { id: 'onboarding', from: '@open-mercato/onboarding' },
   { id: 'api_docs', from: '@open-mercato/core' },
   { id: 'business_rules', from: '@open-mercato/core' },
-  // { id: 'shipments', from: '@open-mercato/fms' },
-  // { id: 'fms_tracking', from: '@open-mercato/fms_tracking' },
   { id: 'feature_toggles', from: '@open-mercato/core' },
   { id: 'workflows', from: '@open-mercato/core' },
-  // { id: 'booking', from: '@open-mercato/core' },
   { id: 'search', from: '@open-mercato/search' },
-  { id: 'progress', from: '@open-mercato/core' },
   { id: 'currencies', from: '@open-mercato/core' },
-  { id: 'annotations', from: '@open-mercato/annotations' },
   { id: 'planner', from: '@open-mercato/core' },
   { id: 'resources', from: '@open-mercato/core' },
   { id: 'staff', from: '@open-mercato/core' },
   { id: 'events', from: '@open-mercato/events' },
-  { id: 'messaging', from: '@open-mercato/messaging' },
   { id: 'notifications', from: '@open-mercato/core' },
+  { id: 'progress', from: '@open-mercato/core' },
   { id: 'integrations', from: '@open-mercato/core' },
   { id: 'data_sync', from: '@open-mercato/core' },
+  { id: 'sync_excel', from: '@open-mercato/core' },
   { id: 'messages', from: '@open-mercato/core' },
   { id: 'ai_assistant', from: '@open-mercato/ai-assistant' },
-  { id: 'contractors', from: '@open-mercato/fms' },
-  { id: 'fms_offers', from: '@open-mercato/fms' },
-  { id: 'fms_locations', from: '@open-mercato/fms' },
-  { id: 'fms_products', from: '@open-mercato/fms' },
-  { id: 'fms_documents', from: '@open-mercato/fms' },
-  { id: 'fms_invoicing', from: '@open-mercato/fms' },
-  { id: 'ksef', from: '@open-mercato/ksef' },
-  { id: 'templating', from: '@open-mercato/templating' },
-  { id: 'documents', from: '@open-mercato/documents' },
-  { id: 'fms_projects', from: '@open-mercato/fms' },
-  { id: 'fms_files', from: '@open-mercato/fms' },
-  // fms_financials merged into fms_documents
-  { id: 'fms_teams', from: '@open-mercato/fms' },
-  { id: 'transports', from: '@open-mercato/fms' },
-  { id: 'email_templates', from: '@open-mercato/fms' },
-  { id: 'pdf_templates', from: '@open-mercato/fms' },
-  { id: 'truck_loading', from: '@open-mercato/fms' },
-  { id: 'scheduler', from: '@open-mercato/scheduler' },
-  { id: 'shipment_tracking', from: '@open-mercato/shipment-tracking' },
-  { id: 'tasks_board', from: '@open-mercato/fms' },
-  { id: 'example', from: '@app' },
-  // 4R Cargo FMS modules
-  { id: 'frc_airports', from: '@open-mercato/fms_4rcargo' },
-  { id: 'frc_rfqs', from: '@open-mercato/fms_4rcargo' },
-  { id: 'frc_offers', from: '@open-mercato/fms_4rcargo' },
-  { id: 'frc_trucks', from: '@open-mercato/fms_4rcargo' },
-  { id: 'frc_projects', from: '@open-mercato/fms_4rcargo' },
-  { id: 'frc_console', from: '@open-mercato/fms_4rcargo' },
-  { id: 'air_cargo', from: '@open-mercato/fms_4rcargo' },
-  { id: 'frc_contractors', from: '@open-mercato/fms_4rcargo' },
-  { id: 'frc_settings', from: '@open-mercato/fms_4rcargo' },
   { id: 'translations', from: '@open-mercato/core' },
+  { id: 'scheduler', from: '@open-mercato/scheduler' },
   { id: 'inbox_ops', from: '@open-mercato/core' },
   { id: 'payment_gateways', from: '@open-mercato/core' },
   { id: 'checkout', from: '@open-mercato/checkout' },
@@ -85,11 +107,39 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'webhooks', from: '@open-mercato/webhooks' },
   { id: 'customer_accounts', from: '@open-mercato/core' },
   { id: 'portal', from: '@open-mercato/core' },
-  { id: 'customs', from: '@open-mercato/customs' },
+  {
+    id: 'example',
+    from: '@app',
+    overrides: {
+      routes: {
+        api: {
+          'GET /api/example/override-probe': {
+            handler: async () => Response.json({
+              ok: true,
+              source: 'modules.ts override',
+              route: 'example.override-probe',
+            }),
+            metadata: { requireAuth: false },
+          },
+        },
+      },
+    },
+  },
+  { id: 'ratelimit_probe', from: '@app' },
 ]
+
+// Official modules activated via official-modules.json / official-modules.local.json
+// (managed by `yarn official-modules`; backed by the external/official-modules submodule).
+for (const entry of officialModuleEntries) {
+  if (!enabledModules.some((existing) => existing.id === entry.id)) enabledModules.push(entry)
+}
 
 if (enabledModules.some((entry) => entry.id === 'example')) {
   enabledModules.push({ id: 'example_customers_sync', from: '@app' })
+}
+
+if (parseBooleanWithDefault(process.env.OM_ENABLE_STORAGE_S3, false)) {
+  enabledModules.push({ id: 'storage_s3', from: '@open-mercato/storage-s3' })
 }
 
 const enterpriseModulesEnabled = parseBooleanWithDefault(process.env.OM_ENABLE_ENTERPRISE_MODULES, false)

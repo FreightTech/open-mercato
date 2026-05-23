@@ -320,7 +320,7 @@ const createSeaContainerCommand: CommandHandler<FmsSeaContainerCommandCreateInpu
       updatedAt: now,
     })
 
-    await em.persistAndFlush(container)
+    await em.persist(container).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

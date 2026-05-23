@@ -27,7 +27,7 @@ interface InvoiceApprovedPayload {
  * creates a KsefInvoice copy for KSeF submission.
  *
  * Any invoicing module can emit this event with source table info.
- * KSeF reads invoice data via Knex without importing from the source module.
+ * KSeF reads invoice data via Kysely without importing from the source module.
  */
 export default async function handle(
   payload: InvoiceApprovedPayload,
@@ -53,12 +53,13 @@ export default async function handle(
     const autoSubmit = (state as unknown as Record<string, unknown>).autoSubmit
     if (!autoSubmit) return
 
-    const knex = (em as unknown as { getConnection: () => { getKnex: () => unknown } }).getConnection().getKnex()
-    const invoiceRow = await (knex as any)(sourceTable)
-      .select('*')
-      .where('id', invoiceId)
-      .whereNull('deleted_at')
-      .first()
+    const db = em.getKysely<any>()
+    const invoiceRow = await db
+      .selectFrom(sourceTable)
+      .selectAll()
+      .where('id', '=', invoiceId)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst()
 
     if (!invoiceRow || invoiceRow.direction !== 'outgoing') return
 
@@ -102,10 +103,12 @@ export default async function handle(
     em.persist(ksefInvoice)
 
     // Copy line items from source table
-    const lineItemRows = await (knex as any)(sourceLineItemsTable)
-      .select('*')
-      .where('invoice_id', invoiceId)
+    const lineItemRows = await db
+      .selectFrom(sourceLineItemsTable)
+      .selectAll()
+      .where('invoice_id', '=', invoiceId)
       .orderBy('line_number', 'asc')
+      .execute()
 
     for (const row of lineItemRows) {
       const lineItem = em.create(KsefInvoiceLineItem, {

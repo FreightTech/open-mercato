@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     const container = await createRequestContainer()
     const em = container.resolve('em') as EntityManager
-    const metadata = em.getMetadata().get(FmsProduct.name)
+    const metadata = em.getMetadata().get(FmsProduct.name as any)
 
     const columns = generateTableConfig(metadata, PRODUCTS_DISPLAY_HINTS)
 

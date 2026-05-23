@@ -1,10 +1,5 @@
-import {
-  Entity,
-  Index,
-  OptionalProps,
-  PrimaryKey,
-  Property,
-} from '@mikro-orm/core'
+import { OptionalProps } from '@mikro-orm/core'
+import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/decorators/legacy'
 import type { ChargeUnit, CarrierType, ProductTransportMode } from './types'
 
 /**

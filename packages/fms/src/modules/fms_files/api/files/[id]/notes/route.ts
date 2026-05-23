@@ -156,7 +156,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
         url: buildAttachmentFileUrl(attachmentId),
         storageMetadata: { originalName: uploadedFile.name },
       })
-      await forkedEm.persistAndFlush(attachment)
+      await forkedEm.persist(attachment).flush()
       attachmentInfo = { id: attachmentId, fileName: safeName, fileSize: uploadedFile.size, mimeType: uploadedFile.type || 'application/octet-stream', url: attachment.url }
     } catch (error) {
       console.error('[fms-files:notes] failed to upload attachment', error)

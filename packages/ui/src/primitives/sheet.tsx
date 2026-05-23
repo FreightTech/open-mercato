@@ -37,15 +37,20 @@ type SheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.C
   overlayClassName?: string
   ariaTitle?: string
   hideCloseButton?: boolean
+  /** Alias of `hideCloseButton`, kept for compatibility with the upstream Sheet API. */
+  hideClose?: boolean
+  /** Override the aria-label for the built-in close button. */
+  closeLabel?: string
   fullWidth?: boolean
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ className, children, side = 'right', overlayClassName, ariaTitle, hideCloseButton, fullWidth, ...props }, ref) => {
+>(({ className, children, side = 'right', overlayClassName, ariaTitle, hideCloseButton, hideClose, closeLabel, fullWidth, ...props }, ref) => {
   const t = useT()
   const defaultAriaTitle = t('ui.sheet.defaultTitle', 'Panel')
+  const isCloseHidden = hideCloseButton || hideClose
 
   const sideStyles = {
     left: 'inset-y-0 left-0 h-full w-3/4 max-w-sm border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left',
@@ -74,10 +79,10 @@ const SheetContent = React.forwardRef<
         <VisuallyHidden asChild>
           <DialogPrimitive.Title>{ariaTitle || defaultAriaTitle}</DialogPrimitive.Title>
         </VisuallyHidden>
-        {!hideCloseButton && (
+        {!isCloseHidden && (
           <SheetClose
             className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            aria-label={t('ui.dialog.close.ariaLabel', 'Close')}
+            aria-label={closeLabel || t('ui.dialog.close.ariaLabel', 'Close')}
           >
             <X className="h-4 w-4" />
           </SheetClose>

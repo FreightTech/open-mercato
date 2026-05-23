@@ -247,7 +247,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
         url: buildAttachmentFileUrl(attachmentId),
         storageMetadata: { originalName: uploadedFile.name },
       })
-      await forkedEm.persistAndFlush(attachment)
+      await forkedEm.persist(attachment).flush()
 
       attachmentInfo = {
         id: attachmentId,

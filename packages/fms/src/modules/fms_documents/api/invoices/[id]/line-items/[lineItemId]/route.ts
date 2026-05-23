@@ -218,7 +218,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
 
   // Remove the line item
-  await em.removeAndFlush(lineItem)
+  await em.remove(lineItem).flush()
 
   // Recalculate invoice totals
   const remainingLineItems = await em.find(FmsInvoiceLineItem, { invoice })

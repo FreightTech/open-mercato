@@ -45,33 +45,34 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * pageSize
 
   const em = container.resolve('em') as EntityManager
-  const knex = (em.getConnection() as unknown as { getKnex(): import('knex').Knex }).getKnex()
+  const db = em.getKysely<any>()
 
   // Get total count of members in this team
-  const countResult = await knex('fms_user_teams as ut')
-    .where('ut.organization_id', organizationId)
-    .where('ut.tenant_id', tenantId)
-    .where('ut.team_id', teamId)
-    .count('* as count')
-    .first()
+  const countResult = await db.selectFrom('fms_user_teams as ut')
+    .where('ut.organization_id', '=', organizationId)
+    .where('ut.tenant_id', '=', tenantId)
+    .where('ut.team_id', '=', teamId)
+    .select(({ fn }) => fn.countAll().as('count'))
+    .executeTakeFirst()
 
   const total = Number(countResult?.count ?? 0)
 
   // Get members with user info
-  const rows = await knex('fms_user_teams as ut')
-    .select(
+  const rows = await db.selectFrom('fms_user_teams as ut')
+    .leftJoin('users as u', 'u.id', 'ut.user_id')
+    .select([
       'ut.id',
       'ut.user_id as userId',
       'u.name as userName',
-      'u.email as userEmail'
-    )
-    .leftJoin('users as u', 'u.id', 'ut.user_id')
-    .where('ut.organization_id', organizationId)
-    .where('ut.tenant_id', tenantId)
-    .where('ut.team_id', teamId)
+      'u.email as userEmail',
+    ])
+    .where('ut.organization_id', '=', organizationId)
+    .where('ut.tenant_id', '=', tenantId)
+    .where('ut.team_id', '=', teamId)
     .orderBy('u.name', 'asc')
     .limit(pageSize)
     .offset(offset)
+    .execute()
 
   const items = rows.map((row) => ({
     id: row.id,

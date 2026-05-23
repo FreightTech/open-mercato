@@ -44,7 +44,7 @@ export async function createFetchConfig(
     updatedAt: new Date(),
   })
 
-  await em.persistAndFlush(config)
+  await em.persist(config).flush()
 
   await deps.fetchScheduleService?.syncFromConfig(config)
 
@@ -71,7 +71,7 @@ export async function updateFetchConfig(
   }
 
   em.assign(config, validated)
-  await em.persistAndFlush(config)
+  await em.persist(config).flush()
 
   await deps.fetchScheduleService?.syncFromConfig(config)
 
@@ -96,5 +96,5 @@ export async function deleteFetchConfig(
 
   await deps.fetchScheduleService?.removeForConfig(config.id)
 
-  await em.removeAndFlush(config)
+  await em.remove(config).flush()
 }

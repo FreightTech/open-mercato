@@ -8,17 +8,8 @@
  * 4. FmsFileUnitLeg — assigns unit to leg with per-assignment details
  */
 
-import {
-  Entity,
-  PrimaryKey,
-  Property,
-  ManyToOne,
-  OneToMany,
-  Collection,
-  Index,
-  Unique,
-  OptionalProps,
-} from '@mikro-orm/core'
+import { Collection, OptionalProps } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, ManyToOne, OneToMany, Index, Unique } from '@mikro-orm/decorators/legacy'
 
 import type { LegTimestampEntry, PackageDetail } from './types'
 

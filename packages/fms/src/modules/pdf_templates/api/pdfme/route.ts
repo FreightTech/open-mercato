@@ -211,7 +211,7 @@ export async function POST(req: Request) {
       isActive: input.isActive,
     })
 
-    await em.persistAndFlush(template)
+    await em.persist(template).flush()
 
     return NextResponse.json({
       id: template.id,

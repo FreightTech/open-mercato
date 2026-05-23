@@ -311,7 +311,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
     })
 
-    await forkedEm.persistAndFlush([document, attachment])
+    await forkedEm.persist([document, attachment]).flush()
 
     return NextResponse.json({
       ok: true,

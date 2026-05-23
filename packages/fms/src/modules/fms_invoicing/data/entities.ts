@@ -1,14 +1,5 @@
-import {
-  Collection,
-  Entity,
-  Index,
-  OneToMany,
-  ManyToOne,
-  OptionalProps,
-  PrimaryKey,
-  Property,
-  Unique,
-} from '@mikro-orm/core'
+import { Collection, OptionalProps } from '@mikro-orm/core'
+import { Entity, Index, OneToMany, ManyToOne, PrimaryKey, Property, Unique } from '@mikro-orm/decorators/legacy'
 import type {
   InvoiceDirection,
   InvoiceSourceType,

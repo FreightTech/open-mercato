@@ -46,8 +46,8 @@ export async function GET(req: Request) {
 
   const userMap = new Map<string, { id: string; name?: string | null; email: string }>()
   if (userIds.size > 0) {
-    const knex = (em as any).getConnection().getKnex()
-    const users = await knex('users').select('id', 'name', 'email').whereIn('id', Array.from(userIds))
+    const db = em.getKysely<any>()
+    const users = await db.selectFrom('users').select(['id', 'name', 'email']).where('id', 'in', Array.from(userIds)).execute()
     for (const u of users) {
       userMap.set(u.id, { id: u.id, name: u.name, email: u.email })
     }

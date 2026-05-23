@@ -147,8 +147,8 @@ export async function GET(req: Request) {
 
   const userMap = new Map<string, { id: string; name?: string | null; email: string }>()
   if (userIds.size > 0) {
-    const knex = (em as any).getConnection().getKnex()
-    const users = await knex('users').select('id', 'name', 'email').whereIn('id', Array.from(userIds))
+    const db = em.getKysely<any>()
+    const users = await db.selectFrom('users').select(['id', 'name', 'email']).where('id', 'in', Array.from(userIds)).execute()
     for (const u of users) {
       userMap.set(u.id, { id: u.id, name: u.name, email: u.email })
     }
@@ -166,8 +166,8 @@ export async function GET(req: Request) {
 
   const contractorMap = new Map<string, string>()
   if (contractorIds.size > 0) {
-    const knex = (em as any).getConnection().getKnex()
-    const contractors = await knex('contractors').select('id', 'name').whereIn('id', Array.from(contractorIds))
+    const db = em.getKysely<any>()
+    const contractors = await db.selectFrom('contractors').select(['id', 'name']).where('id', 'in', Array.from(contractorIds)).execute()
     for (const c of contractors) {
       contractorMap.set(c.id, c.name)
     }
@@ -176,8 +176,8 @@ export async function GET(req: Request) {
   // Fetch carrier names from fms_carriers table
   const carrierMap = new Map<string, string>()
   if (carrierIdSet.size > 0) {
-    const knex = (em as any).getConnection().getKnex()
-    const carriers = await knex('fms_carriers').select('id', 'name').whereIn('id', Array.from(carrierIdSet))
+    const db = em.getKysely<any>()
+    const carriers = await db.selectFrom('fms_carriers').select(['id', 'name']).where('id', 'in', Array.from(carrierIdSet)).execute()
     for (const c of carriers) {
       carrierMap.set(c.id, c.name)
     }
@@ -186,12 +186,10 @@ export async function GET(req: Request) {
   // Fetch base currency for total price conversion
   let baseCurrencyCode = 'USD'
   try {
-    const knex = (em as any).getConnection().getKnex()
-    const tenantFilter = auth.tenantId ? { tenant_id: auth.tenantId } : {}
-    const baseCurrency = await knex('currencies')
-      .select('code')
-      .where({ is_base: true, ...tenantFilter })
-      .first()
+    const db = em.getKysely<any>()
+    let baseCurrencyQuery = db.selectFrom('currencies').select(['code']).where('is_base', '=', true)
+    if (auth.tenantId) baseCurrencyQuery = baseCurrencyQuery.where('tenant_id', '=', auth.tenantId)
+    const baseCurrency = await baseCurrencyQuery.executeTakeFirst()
     if (baseCurrency) baseCurrencyCode = baseCurrency.code
   } catch {
     // fallback to USD

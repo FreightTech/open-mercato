@@ -109,7 +109,7 @@ export async function POST(req: Request) {
     createdAt: now,
     updatedAt: now,
   })
-  await em.persistAndFlush(shipment)
+  await em.persist(shipment).flush()
 
   // Store documents
   const fileEntries: Array<{ file: File; type: DocumentType }> = [
@@ -134,7 +134,7 @@ export async function POST(req: Request) {
     })
     parsedDocs.push(doc)
   }
-  await em.persistAndFlush(parsedDocs)
+  await em.persist(parsedDocs).flush()
 
   // Update status to parsing
   shipment.status = 'parsing'

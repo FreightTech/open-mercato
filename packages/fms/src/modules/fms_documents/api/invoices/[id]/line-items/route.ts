@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     rawDescription: data.description,
   })
 
-  await em.persistAndFlush(lineItem)
+  await em.persist(lineItem).flush()
 
   // Recalculate invoice totals
   const allLineItems = await em.find(FmsInvoiceLineItem, { invoice })

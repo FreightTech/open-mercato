@@ -1,4 +1,5 @@
-import { Entity, PrimaryKey, Property, Index, Unique, ManyToOne, OneToMany, Collection, OptionalProps } from '@mikro-orm/core'
+import { Collection, OptionalProps } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, Index, Unique, ManyToOne, OneToMany } from '@mikro-orm/decorators/legacy'
 import type { ShipmentTimestampEntry } from '../lib/timestamp-utils'
 import type { RouteStopEntry, CargoEventEntry, SealInfo } from '../lib/route-extraction'
 import type { FacilityLocation } from '../lib/location-types'
@@ -111,11 +112,11 @@ export class TrackingJob {
   deletedAt?: Date | null
 
   // One TrackingJob can track multiple shipments (containers)
-  @OneToMany('Shipment', 'trackingJob')
+  @OneToMany(() => Shipment, 'trackingJob')
   shipments = new Collection<Shipment>(this)
 
   // One TrackingJob has many TrackingEvents
-  @OneToMany('TrackingEvent', 'trackingJob')
+  @OneToMany(() => TrackingEvent, 'trackingJob')
   events = new Collection<TrackingEvent>(this)
 }
 

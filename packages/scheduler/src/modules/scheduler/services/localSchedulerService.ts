@@ -108,16 +108,8 @@ export class LocalSchedulerService {
     const bindings = bindingsFromSchedule(schedule, 'local-poll')
     const slog = log.child(bindings)
 
-    const acquired = await this.lockStrategy.tryLock(lockKey)
-
-    if (!acquired) {
-      slog.debug('Schedule already locked, skipping')
-      return
-    }
-
-    const startMs = Date.now()
-
-    try {
+    const { acquired } = await this.lockStrategy.runWithLock(lockKey, async () => {
+      const startMs = Date.now()
       slog.info('Scheduled job started')
 
       await emitSchedulerEvent('scheduler.job.started', {
@@ -222,8 +214,11 @@ export class LocalSchedulerService {
 
         await this.updateNextRun(schedule)
       }
-    } finally {
-      await this.lockStrategy.unlock(lockKey)
+    })
+
+    if (!acquired) {
+      slog.debug('Schedule already locked, skipping')
+      return
     }
   }
 

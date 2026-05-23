@@ -1,4 +1,5 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { sql } from 'kysely'
 import type { SubscriberContext } from '@open-mercato/events'
 import { FmsInvoicingInvoice, FmsInvoicingSettings } from '../data/entities'
 import { FmsInvoicingService } from '../services/invoicing.service'
@@ -55,12 +56,10 @@ export default async function handle(
     }
 
     // Check if the source document invoice is approved
-    const knex = em.getKnex()
-    const sourceRows = await knex.raw<{ rows: Array<{ id: string; status: string }> }>(
-      `SELECT id, status FROM fms_invoices
-       WHERE id = ? AND organization_id = ? AND tenant_id = ? AND deleted_at IS NULL`,
-      [documentInvoiceId, organizationId, tenantId]
-    )
+    const db = em.getKysely<any>()
+    const sourceRows = await sql<{ id: string; status: string }>`
+      SELECT id, status FROM fms_invoices
+      WHERE id = ${documentInvoiceId} AND organization_id = ${organizationId} AND tenant_id = ${tenantId} AND deleted_at IS NULL`.execute(db)
 
     const source = sourceRows.rows[0]
     if (!source) {

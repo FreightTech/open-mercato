@@ -1,11 +1,5 @@
-import {
-  Entity,
-  PrimaryKey,
-  Property,
-  Index,
-  Unique,
-  OptionalProps,
-} from '@mikro-orm/core'
+import { OptionalProps } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, Index, Unique } from '@mikro-orm/decorators/legacy'
 
 @Entity({ tableName: 'fms_teams' })
 @Index({ name: 'fms_teams_org_tenant_idx', properties: ['organizationId', 'tenantId'] })

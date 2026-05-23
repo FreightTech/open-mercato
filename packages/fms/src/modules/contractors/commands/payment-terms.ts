@@ -95,7 +95,7 @@ const deletePaymentTermsCommand: CommandHandler<{ id: string }, { paymentTermsId
 
     const tenantId = paymentTerms.tenantId
     const organizationId = paymentTerms.organizationId
-    await em.removeAndFlush(paymentTerms)
+    await em.remove(paymentTerms).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

@@ -85,7 +85,7 @@ const deleteCreditLimitCommand: CommandHandler<{ id: string }, { creditLimitId: 
 
     const tenantId = creditLimit.tenantId
     const organizationId = creditLimit.organizationId
-    await em.removeAndFlush(creditLimit)
+    await em.remove(creditLimit).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

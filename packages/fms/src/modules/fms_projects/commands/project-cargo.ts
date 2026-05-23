@@ -174,7 +174,7 @@ const createProjectCargoCommand: CommandHandler<FmsProjectCargoCommandCreateInpu
       updatedAt: now,
     })
 
-    await em.persistAndFlush(cargo)
+    await em.persist(cargo).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

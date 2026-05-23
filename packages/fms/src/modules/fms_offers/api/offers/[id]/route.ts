@@ -84,7 +84,7 @@ export async function GET(req: Request, { params }: Params) {
   // Fetch guardian users separately (module isomorphism - no direct User relationship)
   const guardianIds = [offer.operationalGuardianId, offer.businessGuardianId].filter(Boolean) as string[]
   const guardianUsers = guardianIds.length > 0
-    ? await em.find('User', { id: { $in: guardianIds } })
+    ? await em.find('User' as any, { id: { $in: guardianIds } })
     : []
   const guardianMap = new Map(guardianUsers.map((u: any) => [u.id, { id: u.id, name: u.name ?? null, email: u.email }]))
 
@@ -259,7 +259,7 @@ export async function PUT(req: Request, { params }: Params) {
     // Fetch guardians separately (module isomorphism - no direct User relationship)
     const guardianIdsPut = [updated?.operationalGuardianId, updated?.businessGuardianId].filter(Boolean) as string[]
     const guardianUsersPut = guardianIdsPut.length > 0
-      ? await em.find('User', { id: { $in: guardianIdsPut } })
+      ? await em.find('User' as any, { id: { $in: guardianIdsPut } })
       : []
     const guardianMapPut = new Map(guardianUsersPut.map((u: any) => [u.id, { id: u.id, name: u.name ?? null, email: u.email }]))
 

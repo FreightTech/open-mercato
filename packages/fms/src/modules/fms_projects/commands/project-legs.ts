@@ -179,7 +179,7 @@ const createProjectLegCommand: CommandHandler<ProjectLegCreateCommandInput, { le
       }
     }
 
-    await em.persistAndFlush(leg)
+    await em.persist(leg).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

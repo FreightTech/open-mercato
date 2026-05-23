@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { sql } from 'kysely'
 import { wrap } from '@mikro-orm/core'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
@@ -114,20 +115,26 @@ export async function GET(request: NextRequest) {
 
     // Compute maxLegs across ALL units (not just the current page) so the
     // column structure is stable regardless of which page or limit is fetched.
-    const knex = em.getKnex()
+    const db = em.getKysely<any>()
     const orgIds = scopeFilters.organizationId?.$in
-    const countsSubquery = knex('fms_file_unit_legs as ul')
-      .join('fms_file_units as u', 'u.id', 'ul.unit_id')
-      .where('ul.deleted_at', null)
-      .where('u.deleted_at', null)
-      .modify((qb: any) => {
-        if (scopeFilters.tenantId) qb.where('u.tenant_id', scopeFilters.tenantId)
-        if (orgIds && orgIds.length > 0) qb.whereIn('u.organization_id', orgIds)
-      })
-      .groupBy('ul.unit_id')
-      .select(knex.raw('count(*) as leg_count'))
-      .as('counts')
-    const globalMaxLegsRow = await knex.select(knex.raw('coalesce(max(leg_count), 0) as max_legs')).from(countsSubquery).first()
+    const globalMaxLegsRow = await db
+      .selectFrom(
+        (eb) => {
+          let sub = eb
+            .selectFrom('fms_file_unit_legs as ul')
+            .innerJoin('fms_file_units as u', 'u.id', 'ul.unit_id')
+            .where('ul.deleted_at', 'is', null)
+            .where('u.deleted_at', 'is', null)
+          if (scopeFilters.tenantId) sub = sub.where('u.tenant_id', '=', scopeFilters.tenantId)
+          if (orgIds && orgIds.length > 0) sub = sub.where('u.organization_id', 'in', orgIds)
+          return sub
+            .groupBy('ul.unit_id')
+            .select((b) => b.fn.countAll().as('leg_count'))
+            .as('counts')
+        }
+      )
+      .select(sql<number>`coalesce(max(leg_count), 0)`.as('max_legs'))
+      .executeTakeFirst()
     const globalMaxLegs = globalMaxLegsRow?.max_legs ? Number(globalMaxLegsRow.max_legs) : 0
 
     if (total === 0) {

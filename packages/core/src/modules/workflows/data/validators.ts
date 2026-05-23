@@ -134,6 +134,14 @@ export const callApiConfigSchema = z.object({
   timeout: z.number().int().positive().optional(),
 })
 
+export const callWebhookConfigSchema = z.object({
+  url: z.string().min(1, 'Webhook URL is required'),
+  method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).default('POST'),
+  headers: z.record(z.string(), z.string()).optional(),
+  body: z.any().optional(),
+})
+export type CallWebhookConfig = z.infer<typeof callWebhookConfigSchema>
+
 // Retry policy
 export const retryPolicySchema = z.object({
   maxAttempts: z.number().int().min(1).max(10),
@@ -277,7 +285,7 @@ const dateOrNull = z.preprocess((value) => {
 
 // Full schema for database entities (includes tenant fields)
 export const createWorkflowDefinitionSchema = z.object({
-  workflowId: z.string().min(1).max(100).regex(/^[a-z0-9_-]+$/, 'Workflow ID must contain only lowercase letters, numbers, hyphens, and underscores'),
+  workflowId: z.string().min(1).max(100).regex(/^[a-z0-9._-]+$/, 'Workflow ID must contain only lowercase letters, numbers, dots, hyphens, and underscores'),
   workflowName: z.string().min(1).max(255),
   description: z.string().max(2000).optional().nullable(),
   version: z.number().int().positive().default(1),
@@ -295,7 +303,7 @@ export type CreateWorkflowDefinitionInput = z.infer<typeof createWorkflowDefinit
 
 // API input schema (omits tenant fields - injected from auth context)
 export const createWorkflowDefinitionInputSchema = z.object({
-  workflowId: z.string().min(1).max(100).regex(/^[a-z0-9_-]+$/, 'Workflow ID must contain only lowercase letters, numbers, hyphens, and underscores'),
+  workflowId: z.string().min(1).max(100).regex(/^[a-z0-9._-]+$/, 'Workflow ID must contain only lowercase letters, numbers, dots, hyphens, and underscores'),
   workflowName: z.string().min(1).max(255),
   description: z.string().max(2000).optional().nullable(),
   version: z.number().int().positive().default(1),
@@ -313,9 +321,20 @@ export const updateWorkflowDefinitionSchema = createWorkflowDefinitionSchema.par
 export type UpdateWorkflowDefinitionInput = z.infer<typeof updateWorkflowDefinitionSchema>
 
 // API update schema (omits tenant fields and allows partial updates)
+// Accepts the same shape as the create form so the edit page can submit a
+// full payload without triggering "Unrecognized keys" validation errors.
+// workflowId is accepted but ignored by the route handler (it identifies the
+// row); version is applied when supplied so the form can bump it explicitly.
 export const updateWorkflowDefinitionInputSchema = z.object({
+  workflowId: z.string().min(1).max(100).optional(),
+  workflowName: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).optional().nullable(),
+  version: z.number().int().positive().optional(),
   definition: workflowDefinitionDataSchema.optional(),
+  metadata: workflowMetadataSchema.optional().nullable(),
   enabled: z.boolean().optional(),
+  effectiveFrom: dateOrNull.optional(),
+  effectiveTo: dateOrNull.optional(),
 }).strict()
 
 export type UpdateWorkflowDefinitionApiInput = z.infer<typeof updateWorkflowDefinitionInputSchema>

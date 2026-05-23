@@ -1,56 +1,29 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { findApi, type HttpMethod } from '@open-mercato/shared/modules/registry'
+import { findApiRouteManifestMatch, getApiRouteManifests, registerApiRouteManifests, type HttpMethod } from '@open-mercato/shared/modules/registry'
 import { isCrudHttpError } from '@open-mercato/shared/lib/crud/errors'
-import { modules } from '@/.mercato/generated/modules.generated'
+import { apiRoutes } from '@/.mercato/generated/api-routes.generated'
 import { resolveAuthFromRequestDetailed } from '@open-mercato/shared/lib/auth/server'
 import { bootstrap } from '@/bootstrap'
-
-// Ensure all package registrations are initialized for API routes
-bootstrap()
 import type { AuthContext } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
 import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { enforceTenantSelection, normalizeTenantId } from '@open-mercato/core/modules/auth/lib/tenantAccess'
 import { runWithCacheTenant } from '@open-mercato/cache'
-import { withRequestLogging } from '@open-mercato/logger/middleware'
-import { runWithLogContext } from '@open-mercato/logger'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
-import { initMetrics, startResourceMetrics } from '@open-mercato/logger'
 import type { RateLimitConfig } from '@open-mercato/shared/lib/ratelimit/types'
 import { getCachedRateLimiterService } from '@open-mercato/core/bootstrap'
 import { checkRateLimit, getClientIp, RATE_LIMIT_ERROR_KEY, RATE_LIMIT_ERROR_FALLBACK } from '@open-mercato/shared/lib/ratelimit/helpers'
 import { getGlobalEventBus } from '@open-mercato/shared/modules/events'
 import { applicationLifecycleEvents, type ApplicationLifecycleEventId } from '@open-mercato/shared/lib/runtime/events'
 
-// Lazy initialization for metrics with retry limit.
-// initMetrics() must complete before startResourceMetrics() so the
-// global MeterProvider is registered and getMeter() returns a real meter.
-let metricsInitialized = false
-let metricsInitAttempts = 0
-const MAX_INIT_ATTEMPTS = 3
-
-async function ensureMetricsInitialized() {
-  if (metricsInitialized) return
-  if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) return
-
-  metricsInitAttempts++
-
-  try {
-    await initMetrics()
-    startResourceMetrics()
-    metricsInitialized = true
-  } catch (error) {
-    console.error(`[api] Failed to initialize metrics (attempt ${metricsInitAttempts}/${MAX_INIT_ATTEMPTS}):`, error)
-    if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) {
-      console.error('[api] Max metric initialization attempts reached, giving up')
-    }
-  }
-}
-
+// Ensure all package registrations are initialized for API routes.
+bootstrap()
+registerApiRouteManifests(apiRoutes)
 
 type MethodMetadata = {
   requireAuth?: boolean
+  /** @deprecated Use `requireFeatures` instead — role names are mutable and can be spoofed */
   requireRoles?: string[]
   requireFeatures?: string[]
   rateLimit?: RateLimitConfig
@@ -113,9 +86,11 @@ async function emitLifecycleEvent(eventId: ApplicationLifecycleEventId, payload:
 
 function extractMethodMetadata(metadata: unknown, method: HttpMethod): MethodMetadata | null {
   if (!metadata || typeof metadata !== 'object') return null
-  const entry = (metadata as Partial<Record<HttpMethod, unknown>>)[method]
-  if (!entry || typeof entry !== 'object') return null
-  const source = entry as Record<string, unknown>
+  const metadataRecord = metadata as Partial<Record<HttpMethod, unknown>>
+  const entry = metadataRecord[method]
+  const source = entry && typeof entry === 'object'
+    ? entry as Record<string, unknown>
+    : metadata as Record<string, unknown>
   const normalized: MethodMetadata = {}
   if (typeof source.requireAuth === 'boolean') normalized.requireAuth = source.requireAuth
   if (Array.isArray(source.requireRoles)) {
@@ -135,7 +110,21 @@ function extractMethodMetadata(metadata: unknown, method: HttpMethod): MethodMet
       }
     }
   }
-  return normalized
+  return Object.keys(normalized).length > 0 ? normalized : null
+}
+
+function normalizeLoadedMetadata(
+  metadata: unknown,
+  method: HttpMethod,
+  routeKind: 'route-file' | 'legacy'
+): unknown {
+  if (routeKind !== 'legacy') return metadata
+  if (!metadata || typeof metadata !== 'object') return metadata
+  const source = metadata as Record<string, unknown>
+  if (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].some((entryMethod) => entryMethod in source)) {
+    return metadata
+  }
+  return { [method]: metadata }
 }
 
 async function checkAuthorization(
@@ -144,13 +133,20 @@ async function checkAuthorization(
   req: NextRequest
 ): Promise<NextResponse | null> {
   const { t } = await resolveTranslations()
-  if (methodMetadata?.requireAuth && !auth) {
+  const requiresAuthentication = methodMetadata?.requireAuth !== false
+  if (requiresAuthentication && !auth) {
     return NextResponse.json({ error: t('api.errors.unauthorized', 'Unauthorized') }, { status: 401 })
   }
 
   const requiredRoles = methodMetadata?.requireRoles ?? []
   const requiredFeatures = methodMetadata?.requireFeatures ?? []
-  const needsPermissionCheck = requiredRoles.length > 0 || requiredFeatures.length > 0
+
+  if (
+    requiredRoles.length &&
+    (!auth || !Array.isArray(auth.roles) || !requiredRoles.some((role) => auth.roles!.includes(role)))
+  ) {
+    return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredRoles }, { status: 403 })
+  }
 
   let container: Awaited<ReturnType<typeof createRequestContainer>> | null = null
   const ensureContainer = async () => {
@@ -158,7 +154,7 @@ async function checkAuthorization(
     return container
   }
 
-  if (auth && methodMetadata?.requireAuth !== false) {
+  if (auth && requiresAuthentication) {
     const rawTenantCandidate = await extractTenantCandidate(req)
     if (rawTenantCandidate !== undefined) {
       const tenantCandidate = sanitizeTenantCandidate(rawTenantCandidate)
@@ -181,66 +177,49 @@ async function checkAuthorization(
     }
   }
 
-  // Check roles and features, with superadmin bypass
-  if (needsPermissionCheck) {
+  if (requiredFeatures.length) {
     if (!auth) {
       return NextResponse.json({ error: t('api.errors.unauthorized', 'Unauthorized') }, { status: 401 })
     }
-
-    const permContainer = await ensureContainer()
-    const rbac = permContainer.resolve<RbacService>('rbacService')
-    const featureContext = await resolveFeatureCheckContext({ container: permContainer, auth, request: req })
+    const featureContainer = await ensureContainer()
+    const rbac = featureContainer.resolve<RbacService>('rbacService')
+    const featureContext = await resolveFeatureCheckContext({ container: featureContainer, auth, request: req })
     const { organizationId } = featureContext
-    const tenantIdForCheck = featureContext.scope.tenantId ?? auth.tenantId ?? null
-
-    // Check if user is superadmin - superadmins bypass all role/feature checks
-    const acl = await rbac.loadAcl(auth.sub, { tenantId: tenantIdForCheck, organizationId })
-    const isSuperAdmin = acl.isSuperAdmin
-
-    // Check required roles (superadmins bypass)
-    if (requiredRoles.length && !isSuperAdmin) {
-      if (!Array.isArray(auth.roles) || !requiredRoles.some((role) => auth.roles!.includes(role))) {
-        return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredRoles }, { status: 403 })
-      }
-    }
-
-    // Check required features (superadmins bypass)
-    if (requiredFeatures.length && !isSuperAdmin) {
-      const ok = await rbac.userHasAllFeatures(auth.sub, requiredFeatures, {
-        tenantId: tenantIdForCheck,
-        organizationId,
-      })
-      if (!ok) {
+    const ok = await rbac.userHasAllFeatures(auth.sub, requiredFeatures, {
+      tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
+      organizationId,
+    })
+    if (!ok) {
+      try {
+        const acl = await rbac.loadAcl(auth.sub, { tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null, organizationId })
+        console.warn('[api] Forbidden - missing required features', {
+          path: req.nextUrl.pathname,
+          method: req.method,
+          userId: auth.sub,
+          tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
+          selectedOrganizationId: featureContext.scope.selectedId,
+          organizationId,
+          requiredFeatures,
+          grantedFeatures: acl.features,
+          isSuperAdmin: acl.isSuperAdmin,
+          allowedOrganizations: acl.organizations,
+        })
+      } catch (err) {
         try {
-          console.warn('[api] Forbidden - missing required features', {
+          console.warn('[api] Forbidden - could not resolve ACL for logging', {
             path: req.nextUrl.pathname,
             method: req.method,
             userId: auth.sub,
-            tenantId: tenantIdForCheck,
-            selectedOrganizationId: featureContext.scope.selectedId,
+            tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
             organizationId,
             requiredFeatures,
-            grantedFeatures: acl.features,
-            isSuperAdmin: acl.isSuperAdmin,
-            allowedOrganizations: acl.organizations,
+            error: err instanceof Error ? err.message : err,
           })
-        } catch (err) {
-          try {
-            console.warn('[api] Forbidden - could not resolve ACL for logging', {
-              path: req.nextUrl.pathname,
-              method: req.method,
-              userId: auth.sub,
-              tenantId: tenantIdForCheck,
-              organizationId,
-              requiredFeatures,
-              error: err instanceof Error ? err.message : err,
-            })
-          } catch {
-            // best-effort logging; ignore secondary failures
-          }
+        } catch {
+          // best-effort logging; ignore secondary failures
         }
-        return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredFeatures }, { status: 403 })
       }
+      return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredFeatures }, { status: 403 })
     }
   }
 
@@ -298,9 +277,6 @@ async function handleRequest(
   req: NextRequest,
   paramsPromise: Promise<{ slug: string[] }>
 ): Promise<Response> {
-  // Initialize metrics on first request (lazy initialization)
-  await ensureMetricsInitialized()
-
   const startedAt = Date.now()
   const requestId = buildRequestId(req)
   const { t } = await resolveTranslations()
@@ -313,8 +289,8 @@ async function handleRequest(
     receivedAt: new Date().toISOString(),
   }
   await emitLifecycleEvent(applicationLifecycleEvents.requestReceived, receivedPayload)
-  const api = findApi(modules, method, pathname)
-  if (!api) {
+  const match = findApiRouteManifestMatch(getApiRouteManifests(), method, pathname)
+  if (!match) {
     const response = NextResponse.json({ error: t('api.errors.notFound', 'Not Found') }, { status: 404 })
     await emitLifecycleEvent(applicationLifecycleEvents.requestNotFound, {
       ...receivedPayload,
@@ -323,6 +299,21 @@ async function handleRequest(
     })
     return response
   }
+  const loadedRouteModule = await match.route.load()
+  const rawHandler = match.route.kind === 'legacy'
+    ? (loadedRouteModule.default ?? loadedRouteModule[method] ?? loadedRouteModule.handler)
+    : loadedRouteModule[method]
+  if (typeof rawHandler !== 'function') {
+    const response = NextResponse.json({ error: t('api.errors.notFound', 'Not Found') }, { status: 404 })
+    await emitLifecycleEvent(applicationLifecycleEvents.requestNotFound, {
+      ...receivedPayload,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    })
+    return response
+  }
+  const handler = rawHandler as (req: NextRequest, ctx?: HandlerContext) => Promise<Response> | Response
+  const routeMetadata = normalizeLoadedMetadata(loadedRouteModule.metadata, method, match.route.kind)
   const authResolution = await resolveAuthFromRequestDetailed(req)
   const auth = authResolution.auth
   await emitLifecycleEvent(applicationLifecycleEvents.requestAuthResolved, {
@@ -332,7 +323,7 @@ async function handleRequest(
     tenantId: auth?.tenantId ?? null,
   })
 
-  const methodMetadata = extractMethodMetadata(api.metadata, method)
+  const methodMetadata = extractMethodMetadata(routeMetadata, method)
   const authError = await checkAuthorization(methodMetadata, auth, req)
   if (authError) {
     const response = authResolution.status === 'invalid' && authError.status === 401
@@ -374,18 +365,9 @@ async function handleRequest(
     }
   }
 
-  try {     
-    const handlerContext: HandlerContext = { params: api.params, auth }
-
-    const brandId = req.headers.get('x-brand-id') ?? undefined
-         
-    const response = await withRequestLogging(
-    { method, path: pathname, tenantId: auth?.tenantId, userId: auth?.sub, organizationId: auth?.orgId },
-    () => runWithLogContext(
-      { brandId },
-      () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
-    ),
-  )
+  try {
+    const handlerContext: HandlerContext = { params: match.params, auth }
+    const response = await runWithCacheTenant(auth?.tenantId ?? null, () => handler(req, handlerContext))
     const finalResponse = authResolution.status === 'invalid' && response.status === 401
       ? clearStaffAuthCookies(response)
       : response

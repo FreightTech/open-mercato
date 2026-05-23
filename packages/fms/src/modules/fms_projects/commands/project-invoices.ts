@@ -160,7 +160,7 @@ const createProjectInvoiceCommand: CommandHandler<FmsProjectInvoiceCreateInput, 
       updatedAt: now,
     })
 
-    await em.persistAndFlush(invoice)
+    await em.persist(invoice).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

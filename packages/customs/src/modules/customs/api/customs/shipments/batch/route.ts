@@ -250,7 +250,7 @@ export async function POST(req: Request) {
       createdAt: now,
       updatedAt: now,
     })
-    await em.persistAndFlush(shipment)
+    await em.persist(shipment).flush()
 
     const docEntries: Array<{ file: File; type: DocumentType }> = []
     if (group.bl) docEntries.push({ file: group.bl, type: 'bill_of_lading' })

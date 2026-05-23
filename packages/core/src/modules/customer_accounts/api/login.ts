@@ -15,8 +15,12 @@ import {
   customerLoginRateLimitConfig,
   customerLoginIpRateLimitConfig,
 } from '@open-mercato/core/modules/customer_accounts/lib/rateLimiter'
+import {
+  resolveTenantContext,
+  TenantResolutionError,
+} from '@open-mercato/core/modules/customer_accounts/lib/resolveTenantContext'
 
-export const metadata: { path?: string } = {}
+export const metadata: { path?: string; requireAuth?: boolean } = { requireAuth: false }
 
 export async function POST(req: Request) {
   let body: unknown
@@ -31,9 +35,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Invalid credentials' }, { status: 400 })
   }
 
-  const { email, password, tenantId } = parsed.data
-  if (!tenantId) {
-    return NextResponse.json({ ok: false, error: 'tenantId is required' }, { status: 400 })
+  const { email, password } = parsed.data
+  let tenantId: string
+  try {
+    const context = await resolveTenantContext(req, parsed.data.tenantId)
+    tenantId = context.tenantId
+  } catch (err) {
+    if (err instanceof TenantResolutionError) {
+      return NextResponse.json({ ok: false, error: err.message }, { status: err.status })
+    }
+    throw err
   }
 
   const { error: rateLimitError, compoundKey } = await checkAuthRateLimit({
@@ -68,6 +79,15 @@ export async function POST(req: Request) {
   if (!passwordValid) {
     await customerUserService.incrementFailedAttempts(user)
     void emitCustomerAccountsEvent('customer_accounts.login.failed', { email, reason: 'invalid_password', tenantId }).catch(() => undefined)
+    return NextResponse.json({ ok: false, error: 'Invalid email or password' }, { status: 401 })
+  }
+
+  if (!user.emailVerifiedAt) {
+    void emitCustomerAccountsEvent('customer_accounts.login.failed', {
+      email,
+      reason: 'email_not_verified',
+      tenantId,
+    }).catch(() => undefined)
     return NextResponse.json({ ok: false, error: 'Invalid email or password' }, { status: 401 })
   }
 

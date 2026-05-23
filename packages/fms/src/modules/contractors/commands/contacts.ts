@@ -120,7 +120,7 @@ const deleteContactCommand: CommandHandler<{ id: string }, { contactId: string }
 
     const tenantId = contact.tenantId
     const organizationId = contact.organizationId
-    await em.removeAndFlush(contact)
+    await em.remove(contact).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

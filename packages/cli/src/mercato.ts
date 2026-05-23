@@ -3,14 +3,29 @@
 
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { runWorker } from '@open-mercato/queue/worker'
-import type { Module } from '@open-mercato/shared/modules/registry'
+import type { Module, ModuleWorker } from '@open-mercato/shared/modules/registry'
 import { getCliModules, hasCliModules, registerCliModules } from './registry'
 export { getCliModules, hasCliModules, registerCliModules }
 import { parseBooleanToken } from '@open-mercato/shared/lib/boolean'
 import { getSslConfig } from '@open-mercato/shared/lib/db/ssl'
-import { getRedisUrl } from '@open-mercato/shared/lib/redis/connection'
+import { getRedisUrl, getRedisUrlOrThrow } from '@open-mercato/shared/lib/redis/connection'
 import { resolveInitDerivedSecrets } from './lib/init-secrets'
+import {
+  resolveAutoSpawnWorkersMode,
+  resolveLazyPollMs,
+  resolveLazyRestart,
+} from './lib/auto-spawn-workers'
+import { startLazyWorkerSupervisor } from './lib/queue-worker-supervisor'
+import {
+  resolveAutoSpawnSchedulerMode,
+  resolveLazySchedulerPollMs,
+  resolveLazySchedulerRestart,
+} from './lib/auto-spawn-scheduler'
+import { startLazySchedulerSupervisor } from './lib/scheduler-supervisor'
 import { parseModuleInstallArgs } from './lib/module-install-args'
+import { resolveNextBuildIdCandidate } from './lib/next-build-id'
+import { acquireServerStartLock } from './lib/server-start-lock'
+import { createDevEnvReloader, watchDevEnvFiles } from './lib/dev-env-reload'
 // Lazy-imported to avoid pulling in `testcontainers` (devDependency) at startup
 const lazyIntegration = () => import('./lib/testing/integration')
 import type { ChildProcess } from 'node:child_process'
@@ -18,11 +33,206 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 let envLoaded = false
+const initialProcessEnvironmentEntries = Object.entries(process.env)
+
+function getRegisteredCliWorkers(modules: Module[] = getCliModules()): ModuleWorker[] {
+  const allWorkers: ModuleWorker[] = []
+  for (const mod of modules) {
+    if (mod.workers) {
+      allWorkers.push(...mod.workers)
+    }
+  }
+  return allWorkers
+}
 
 export function padByCodePointWidth(value: string, targetWidth: number): string {
   const valueWidth = [...value].length
   if (valueWidth >= targetWidth) return value
   return `${value}${' '.repeat(targetWidth - valueWidth)}`
+}
+
+type ErrorWithCause = {
+  message?: string
+  code?: string
+  cause?: unknown
+  errors?: unknown[]
+}
+
+const TURBOPACK_CORRUPTION_PATTERNS = [
+  'Failed to restore task data (corrupted database or bug)',
+  'Unable to open static sorted file',
+  'TurbopackInternalError',
+]
+
+const BUILTIN_CLI_MODULE_IDS = new Set(['queue', 'generate', 'db', 'server', 'test'])
+
+function collectNestedErrors(error: unknown, seen = new Set<unknown>()): ErrorWithCause[] {
+  if (!error || seen.has(error)) {
+    return []
+  }
+
+  seen.add(error)
+
+  if (typeof error !== 'object') {
+    return [{ message: String(error) }]
+  }
+
+  const current = error as ErrorWithCause
+  const nested: ErrorWithCause[] = [current]
+
+  if (Array.isArray(current.errors)) {
+    for (const item of current.errors) {
+      nested.push(...collectNestedErrors(item, seen))
+    }
+  }
+
+  if (current.cause) {
+    nested.push(...collectNestedErrors(current.cause, seen))
+  }
+
+  return nested
+}
+
+function getDatabaseTargetLabel(): string {
+  const rawUrl = process.env.DATABASE_URL?.trim()
+  if (!rawUrl) {
+    return 'the database configured by DATABASE_URL'
+  }
+
+  try {
+    const parsed = new URL(rawUrl)
+    const host = parsed.hostname || 'localhost'
+    const port = parsed.port || '5432'
+    const database = parsed.pathname.replace(/^\/+/, '') || '(default database)'
+    return `PostgreSQL at ${host}:${port}/${database}`
+  } catch {
+    return 'the database configured by DATABASE_URL'
+  }
+}
+
+function getFallbackErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  const nestedErrors = collectNestedErrors(error)
+
+  return nestedErrors
+    .map((item) => item.message?.trim() ?? '')
+    .find((item) => item.length > 0)
+    ?? (typeof message === 'string' && message.trim().length > 0 ? message : 'Unknown error')
+}
+
+function detectDatabaseConnectionIssue(
+  error: unknown,
+): { target: string; reason: 'refused the connection' | 'could not be resolved' } | null {
+  const nestedErrors = collectNestedErrors(error)
+  const hasConnectionRefused = nestedErrors.some((item) =>
+    item.code === 'ECONNREFUSED' || /ECONNREFUSED|Connection refused|connect ECONNREFUSED/i.test(item.message || ''),
+  )
+  const hasDnsFailure = nestedErrors.some((item) =>
+    item.code === 'ENOTFOUND'
+      || item.code === 'EAI_AGAIN'
+      || /ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(item.message || ''),
+  )
+
+  if (!hasConnectionRefused && !hasDnsFailure) {
+    return null
+  }
+
+  return {
+    target: getDatabaseTargetLabel(),
+    reason: hasConnectionRefused ? 'refused the connection' : 'could not be resolved',
+  }
+}
+
+function formatCliFailureMessage(modName: string, cmdName: string, error: unknown): string {
+  const fallbackMessage = getFallbackErrorMessage(error)
+  const databaseIssue = detectDatabaseConnectionIssue(error)
+
+  const isDatabaseCommand = modName === 'db' && ['migrate', 'generate', 'greenfield'].includes(cmdName)
+  const isDatabaseBackedRuntimeCommand =
+    (modName === 'queue' && ['worker', 'status', 'clear'].includes(cmdName)) ||
+    (modName === 'scheduler' && ['start'].includes(cmdName)) ||
+    (modName === 'configs' && ['cache'].includes(cmdName))
+
+  if (isDatabaseCommand && databaseIssue) {
+    return `${databaseIssue.target} is not reachable: it ${databaseIssue.reason}. Start the database service or fix DATABASE_URL in .env, then retry \`yarn db:${cmdName}\`.`
+  }
+
+  if (isDatabaseBackedRuntimeCommand && databaseIssue) {
+    return `${databaseIssue.target} is not reachable: it ${databaseIssue.reason}. This command needs PostgreSQL. Start the database service or fix DATABASE_URL in .env, then retry \`yarn mercato ${modName} ${cmdName}\`.`
+  }
+
+  return fallbackMessage
+}
+
+function formatInitFailureMessage(error: unknown): string {
+  const fallbackMessage = getFallbackErrorMessage(error)
+  const databaseIssue = detectDatabaseConnectionIssue(error)
+
+  if (databaseIssue) {
+    return `${databaseIssue.target} is not reachable: it ${databaseIssue.reason}. Start PostgreSQL or fix DATABASE_URL in .env, then retry \`yarn initialize\`.`
+  }
+
+  return fallbackMessage
+}
+
+async function ensureDatabaseExists(dbUrl: string): Promise<boolean> {
+  let parsed: URL
+  try {
+    parsed = new URL(dbUrl)
+  } catch {
+    return true
+  }
+
+  const dbName = parsed.pathname.replace(/^\/+/, '')
+  if (!dbName) return true
+
+  const maintenanceUrl = new URL(dbUrl)
+  maintenanceUrl.pathname = '/postgres'
+
+  const { Client } = await import('pg')
+  const adminClient = new Client({ connectionString: maintenanceUrl.toString(), ssl: getSslConfig() })
+
+  try {
+    await adminClient.connect()
+
+    const result = await adminClient.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName])
+    if (result.rows.length > 0) return true
+
+    console.log(`   Database "${dbName}" does not exist. Attempting to create it...`)
+    try {
+      await adminClient.query(`CREATE DATABASE "${dbName.replace(/"/g, '')}"`)
+      console.log(`   Database "${dbName}" created successfully.`)
+      return true
+    } catch (createError: unknown) {
+      const msg = createError instanceof Error ? createError.message : String(createError)
+      console.error(`   Failed to create database "${dbName}": ${msg}`)
+      console.error(``)
+      console.error(`   To create the database manually, connect to PostgreSQL and run:`)
+      console.error(``)
+      console.error(`     CREATE DATABASE "${dbName}";`)
+      console.error(``)
+      console.error(`   Or from the command line (as a superuser or the owner):`)
+      console.error(``)
+      console.error(`     createdb "${dbName}"`)
+      console.error(``)
+      console.error(`   On Windows with the default postgres user:`)
+      console.error(``)
+      console.error(`     psql -U postgres -c "CREATE DATABASE \\"${dbName}\\";"`)
+      return false
+    }
+  } catch {
+    return true
+  } finally {
+    try { await adminClient.end() } catch {}
+  }
+}
+
+function isTurbopackCacheCorruption(output: string): boolean {
+  return TURBOPACK_CORRUPTION_PATTERNS.every((pattern) => output.includes(pattern))
+}
+
+function removeTurbopackDevCache(appDir: string): void {
+  fs.rmSync(path.join(appDir, '.mercato', 'next', 'dev'), { recursive: true, force: true })
 }
 
 async function ensureEnvLoaded() {
@@ -38,6 +248,13 @@ async function ensureEnvLoaded() {
 
     // Load .env from app directory if it exists
     const envPath = path.join(appDir, '.env')
+    if (!fs.existsSync(envPath) && process.env.NODE_ENV !== 'production') {
+      const examplePath = path.join(appDir, '.env.example')
+      if (fs.existsSync(examplePath)) {
+        fs.copyFileSync(examplePath, envPath)
+        console.log(`📋 Copied .env.example → .env (edit ${envPath} to customize)`)
+      }
+    }
     if (fs.existsSync(envPath)) {
       const dotenv = await import('dotenv')
       dotenv.config({ path: envPath })
@@ -62,6 +279,167 @@ function resolveInstalledBinary(baseDirs: string[], relativeBinPath: string): st
   }
   throw new Error(
     `Could not find installed binary "${relativeBinPath}". Checked: ${Array.from(checked).join(', ')}`,
+  )
+}
+
+function buildServerProcessEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const runtimeEnv = { ...environment }
+  runtimeEnv.NODE_ENV = 'production'
+  const normalizedNodeOptions = (runtimeEnv.NODE_OPTIONS ?? '')
+    .replace(/(?:^|\s)--require=newrelic(?=\s|$)/g, ' ')
+    .replace(/(?:^|\s)-r\s+newrelic(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (runtimeEnv.NEW_RELIC_LICENSE_KEY?.trim()) {
+    runtimeEnv.NODE_OPTIONS = normalizedNodeOptions.length > 0
+      ? `${normalizedNodeOptions} -r newrelic`
+      : '-r newrelic'
+    return runtimeEnv
+  }
+
+  if (normalizedNodeOptions.length > 0) {
+    runtimeEnv.NODE_OPTIONS = normalizedNodeOptions
+  } else {
+    delete runtimeEnv.NODE_OPTIONS
+  }
+
+  return runtimeEnv
+}
+
+type ManagedProcessExitResult = {
+  label: string
+  code: number | null
+  signal: NodeJS.Signals | null
+}
+
+type DevServerRestartResult = {
+  label: string
+  restart: true
+  filePath: string
+}
+
+type DevServerExitResult = ManagedProcessExitResult | DevServerRestartResult
+
+type ModuleCommandLookupResult =
+  | {
+      status: 'ok'
+      module: Module
+      command: NonNullable<Module['cli']>[number]
+    }
+  | {
+      status: 'missing-module' | 'missing-cli' | 'missing-command'
+    }
+
+function waitForManagedProcessExit(proc: ChildProcess, label: string): Promise<ManagedProcessExitResult> {
+  return new Promise((resolve) => {
+    proc.on('exit', (code, signal) => {
+      resolve({ label, code, signal })
+    })
+  })
+}
+
+function isExpectedManagedExitSignal(signal: NodeJS.Signals | null): boolean {
+  return signal === 'SIGINT' || signal === 'SIGTERM'
+}
+
+function isExpectedManagedExit(
+  result: ManagedProcessExitResult,
+  options: { stopping?: boolean } = {},
+): boolean {
+  if (isExpectedManagedExitSignal(result.signal)) return true
+
+  // Queue workers handle SIGINT/SIGTERM themselves so they can close queue
+  // resources before exiting. That graceful path calls process.exit(0), which
+  // reports as { code: 0, signal: null } to the supervising server process.
+  return options.stopping === true && result.code === 0
+}
+
+function formatManagedProcessExitStatus(result: ManagedProcessExitResult): string {
+  if (typeof result.code === 'number') {
+    return `exit code ${result.code}`
+  }
+  if (result.signal) {
+    return `signal ${result.signal}`
+  }
+  return 'an unknown status'
+}
+
+function createManagedProcessExitError(result: ManagedProcessExitResult): Error {
+  return new Error(`[server] ${result.label} exited unexpectedly with ${formatManagedProcessExitStatus(result)}.`)
+}
+
+function isDevServerRestartResult(result: DevServerExitResult): result is DevServerRestartResult {
+  return 'restart' in result && result.restart === true
+}
+
+function formatQueueWorkerLabel(queueNames: string[]): string {
+  if (queueNames.length === 0) return 'Queue worker'
+  const sorted = [...queueNames].sort((a, b) => a.localeCompare(b))
+  const preview = sorted.length > 4 ? `${sorted.slice(0, 4).join(', ')}, +${sorted.length - 4} more` : sorted.join(', ')
+  return `Queue worker (${preview})`
+}
+
+function lookupModuleCommand(
+  allModules: Module[],
+  moduleName: string,
+  commandName: string,
+): ModuleCommandLookupResult {
+  const mod = allModules.find((entry) => entry.id === moduleName)
+  if (!mod) {
+    return { status: 'missing-module' }
+  }
+
+  if (!mod.cli || mod.cli.length === 0) {
+    return { status: 'missing-cli' }
+  }
+
+  const command = mod.cli.find((entry) => entry.command === commandName)
+  if (!command) {
+    return { status: 'missing-command' }
+  }
+
+  return {
+    status: 'ok',
+    module: mod,
+    command,
+  }
+}
+
+function describeMissingModuleCommand(result: Exclude<ModuleCommandLookupResult, { status: 'ok' }>): string {
+  switch (result.status) {
+    case 'missing-module':
+      return 'module not enabled'
+    case 'missing-cli':
+      return 'module has no CLI commands'
+    case 'missing-command':
+      return 'command not found'
+  }
+}
+
+function ensureNextBuildIdInConfiguredDistDir(appDir: string): void {
+  const configuredDistDir = path.join(appDir, '.mercato', 'next')
+  const configuredBuildIdPath = path.join(configuredDistDir, 'BUILD_ID')
+  const configuredBuildId = resolveNextBuildIdCandidate(configuredDistDir)
+  if (configuredBuildId) {
+    if (!fs.existsSync(configuredBuildIdPath)) {
+      fs.mkdirSync(path.dirname(configuredBuildIdPath), { recursive: true })
+      fs.writeFileSync(configuredBuildIdPath, configuredBuildId, 'utf8')
+      console.warn('[server] Reconstructed BUILD_ID inside .mercato/next from existing build artifacts.')
+    }
+    return
+  }
+
+  const fallbackDistDir = path.join(appDir, '.next')
+  const fallbackBuildId = resolveNextBuildIdCandidate(fallbackDistDir)
+  if (!fallbackBuildId) {
+    return
+  }
+
+  fs.mkdirSync(path.dirname(configuredBuildIdPath), { recursive: true })
+  fs.writeFileSync(configuredBuildIdPath, fallbackBuildId, 'utf8')
+  console.warn(
+    '[server] Recovered BUILD_ID from .next build artifacts into .mercato/next to match the configured distDir.',
   )
 }
 
@@ -104,32 +482,28 @@ async function runModuleCommand(
   moduleName: string,
   commandName: string,
   args: string[] = [],
-  options: { optional?: boolean } = {},
-): Promise<void> {
-  const mod = allModules.find((m) => m.id === moduleName)
-  if (!mod) {
+  options: { optional?: boolean; silentOptional?: boolean } = {},
+): Promise<boolean> {
+  const resolved = lookupModuleCommand(allModules, moduleName, commandName)
+  if (resolved.status !== 'ok') {
     if (options.optional) {
-      console.log(`⏭️  Skipping "${moduleName}:${commandName}" — module not enabled`)
-      return
+      if (!options.silentOptional) {
+        console.log(`⏭️  Skipping "${moduleName}:${commandName}" — ${describeMissingModuleCommand(resolved)}`)
+      }
+      return false
     }
-    throw new Error(`Module not found: "${moduleName}"`)
-  }
-  if (!mod.cli || mod.cli.length === 0) {
-    if (options.optional) {
-      console.log(`⏭️  Skipping "${moduleName}:${commandName}" — module has no CLI commands`)
-      return
+    switch (resolved.status) {
+      case 'missing-module':
+        throw new Error(`Module not found: "${moduleName}"`)
+      case 'missing-cli':
+        throw new Error(`Module "${moduleName}" has no CLI commands`)
+      case 'missing-command':
+        throw new Error(`Command "${commandName}" not found in module "${moduleName}"`)
     }
-    throw new Error(`Module "${moduleName}" has no CLI commands`)
   }
-  const cmd = mod.cli.find((c) => c.command === commandName)
-  if (!cmd) {
-    if (options.optional) {
-      console.log(`⏭️  Skipping "${moduleName}:${commandName}" — command not found`)
-      return
-    }
-    throw new Error(`Command "${commandName}" not found in module "${moduleName}"`)
-  }
-  await cmd.run(args)
+
+  await resolved.command.run(args)
+  return true
 }
 
 // Build all CLI modules (registered + built-in)
@@ -222,6 +596,8 @@ export async function run(argv = process.argv) {
           console.error('DATABASE_URL is not set. Aborting reinstall.')
           return 1
         }
+        const dbExists = await ensureDatabaseExists(dbUrl)
+        if (!dbExists) return 1
         const client = new Client({ connectionString: dbUrl, ssl: getSslConfig() })
         try {
           await client.connect()
@@ -258,14 +634,33 @@ export async function run(argv = process.argv) {
         } finally {
           try { await client.end() } catch {}
         }
-        // Also flush Redis
-        try {
+        // Also flush Redis when configured. Skip silently if no URL is set —
+        // a stray ioredis client with auto-reconnect would otherwise spam
+        // ETIMEDOUT errors for the rest of the process lifetime.
+        const redisUrl = getRedisUrl()
+        if (redisUrl) {
           const Redis = (await import('ioredis')).default
-          const redis = new Redis(getRedisUrl())
-          await redis.flushall()
-          await redis.quit()
-          console.log('   Redis flushed.')
-        } catch {}
+          const redis = new Redis(redisUrl, {
+            lazyConnect: true,
+            connectTimeout: 3000,
+            maxRetriesPerRequest: 1,
+            retryStrategy: () => null,
+            enableOfflineQueue: false,
+          })
+          redis.on('error', () => {})
+          try {
+            await redis.connect()
+            await redis.flushall()
+            console.log('   Redis flushed.')
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            console.log(`   Redis flush skipped (${message}).`)
+          } finally {
+            try { redis.disconnect() } catch {}
+          }
+        } else {
+          console.log('   Redis flush skipped (REDIS_URL not configured).')
+        }
         console.log('✅ Database cleared. Proceeding with fresh initialization...\n')
       }
 
@@ -278,6 +673,8 @@ export async function run(argv = process.argv) {
         }
 
         const { Client } = await import('pg')
+        const dbExists = await ensureDatabaseExists(dbUrl)
+        if (!dbExists) return 1
         const client = new Client({ connectionString: dbUrl, ssl: getSslConfig() })
         try {
           await client.connect()
@@ -418,8 +815,11 @@ export async function run(argv = process.argv) {
       console.log('✅ RBAC setup complete:', { tenantId, organizationId: orgId }, '\n')
 
       console.log('🎛️  Seeding feature toggle defaults...')
-      await runModuleCommand(allModules, 'feature_toggles', 'seed-defaults', [])
-      console.log('🎛️  ✅ Feature toggle defaults seeded\n')
+      if (await runModuleCommand(allModules, 'feature_toggles', 'seed-defaults', [], { optional: true })) {
+        console.log('🎛️  ✅ Feature toggle defaults seeded\n')
+      } else {
+        console.log('')
+      }
 
       if (tenantId) {
         console.log('👥 Seeding tenant-scoped roles...')
@@ -485,22 +885,31 @@ export async function run(argv = process.argv) {
           )
           const stressArgs = ['--tenant', tenantId, '--org', orgId, '--count', String(stressTestCount)]
           if (stressTestLite) stressArgs.push('--lite')
-          await runModuleCommand(allModules, 'customers', 'seed-stresstest', stressArgs, { optional: true })
-          console.log(`✅ Stress test customers seeded (requested ${stressTestCount})\n`)
+          if (await runModuleCommand(allModules, 'customers', 'seed-stresstest', stressArgs, { optional: true })) {
+            console.log(`✅ Stress test customers seeded (requested ${stressTestCount})\n`)
+          } else {
+            console.log('')
+          }
         }
 
         console.log('🧩 Enabling default dashboard widgets...')
-        await runModuleCommand(allModules, 'dashboards', 'seed-defaults', ['--tenant', tenantId], { optional: true })
-        console.log('✅ Dashboard widgets enabled\n')
+        if (await runModuleCommand(allModules, 'dashboards', 'seed-defaults', ['--tenant', tenantId], { optional: true })) {
+          console.log('✅ Dashboard widgets enabled\n')
+        } else {
+          console.log('')
+        }
 
         console.log('📊 Enabling analytics widgets for admin and employee roles...')
-        await runModuleCommand(allModules, 'dashboards', 'enable-analytics-widgets', [
+        if (await runModuleCommand(allModules, 'dashboards', 'enable-analytics-widgets', [
           '--tenant',
           tenantId,
           '--roles',
           'admin,employee',
-        ])
-        console.log('✅ Analytics widgets enabled for roles\n')
+        ], { optional: true })) {
+          console.log('✅ Analytics widgets enabled for roles\n')
+        } else {
+          console.log('')
+        }
 
       } else {
         console.log('⚠️  Could not get organization ID or tenant ID, skipping seeding steps\n')
@@ -510,13 +919,19 @@ export async function run(argv = process.argv) {
       const vectorArgs = tenantId
         ? ['--tenant', tenantId, ...(orgId ? ['--org', orgId] : [])]
         : ['--purgeFirst=false']
-      await runModuleCommand(allModules, 'search', 'reindex', vectorArgs, { optional: true })
-      console.log('✅ Search indexes built\n')
+      if (await runModuleCommand(allModules, 'search', 'reindex', vectorArgs, { optional: true })) {
+        console.log('✅ Search indexes built\n')
+      } else {
+        console.log('')
+      }
 
       console.log('🔍 Rebuilding query indexes...')
       const queryIndexArgs = ['--force', ...(tenantId ? ['--tenant', tenantId] : [])]
-      await runModuleCommand(allModules, 'query_index', 'reindex', queryIndexArgs, { optional: true })
-      console.log('✅ Query indexes rebuilt\n')
+      if (await runModuleCommand(allModules, 'query_index', 'reindex', queryIndexArgs, { optional: true })) {
+        console.log('✅ Query indexes rebuilt\n')
+      } else {
+        console.log('')
+      }
 
       const adminPasswordOverride = derivedSecrets.adminPassword
       const employeePasswordOverride = derivedSecrets.employeePassword
@@ -817,9 +1232,10 @@ export async function run(argv = process.argv) {
 
               console.log(`[worker] Starting "${queue}" with ${queueWorkers.length} handler(s), concurrency: ${concurrency}`)
 
+              const queueRedisUrl = getRedisUrl('QUEUE')
               await runWorker({
                 queueName: queue,
-                connection: { url: getRedisUrl('QUEUE') },
+                connection: queueRedisUrl ? { url: queueRedisUrl } : undefined,
                 concurrency,
                 background: true,
                 handler: async (job, ctx) => {
@@ -847,9 +1263,10 @@ export async function run(argv = process.argv) {
 
               console.log(`[worker] Found ${queueWorkers.length} worker(s) for queue "${queueName}"`)
 
+              const queueRedisUrl = getRedisUrl('QUEUE')
               await runWorker({
                 queueName: queueName!,
-                connection: { url: getRedisUrl('QUEUE') },
+                connection: queueRedisUrl ? { url: queueRedisUrl } : undefined,
                 concurrency,
                 handler: async (job, ctx) => {
                   for (const worker of queueWorkers) {
@@ -880,7 +1297,7 @@ export async function run(argv = process.argv) {
 
           const queue = strategyEnv === 'async'
             ? createQueue(queueName, 'async', {
-                connection: { url: getRedisUrl('QUEUE') },
+                connection: { url: getRedisUrlOrThrow('QUEUE') },
               })
             : createQueue(queueName, 'local')
 
@@ -903,7 +1320,7 @@ export async function run(argv = process.argv) {
 
           const queue = strategyEnv === 'async'
             ? createQueue(queueName, 'async', {
-                connection: { url: getRedisUrl('QUEUE') },
+                connection: { url: getRedisUrlOrThrow('QUEUE') },
               })
             : createQueue(queueName, 'local')
 
@@ -1234,10 +1651,13 @@ export async function run(argv = process.argv) {
           const appDir = env.appDir
           const nodeModulesBases = Array.from(new Set([env.rootDir, appDir]))
 
-          const processes: ChildProcess[] = []
-          const autoSpawnWorkers = process.env.AUTO_SPAWN_WORKERS !== 'false'
-          const autoSpawnScheduler = process.env.AUTO_SPAWN_SCHEDULER !== 'false'
-          const queueStrategy = process.env.QUEUE_STRATEGY || 'local'
+          let processes: ChildProcess[] = []
+          let didRetryCorruptedTurbopackCache = false
+          let stopping = false
+          let envChangePromiseResolve: ((result: DevServerRestartResult) => void) | null = null
+          let activeLazySupervisor: ReturnType<typeof startLazyWorkerSupervisor> | null = null
+          let activeLazySchedulerSupervisor: ReturnType<typeof startLazySchedulerSupervisor> | null = null
+          const envReloader = createDevEnvReloader(appDir, process.env, initialProcessEnvironmentEntries)
 
           function cleanup() {
             console.log('[server] Shutting down...')
@@ -1246,10 +1666,60 @@ export async function run(argv = process.argv) {
                 proc.kill('SIGTERM')
               }
             }
+            if (activeLazySupervisor) {
+              void activeLazySupervisor.close().catch(() => undefined)
+            }
+            if (activeLazySchedulerSupervisor) {
+              void activeLazySchedulerSupervisor.close().catch(() => undefined)
+            }
           }
 
-          process.on('SIGTERM', cleanup)
-          process.on('SIGINT', cleanup)
+          async function cleanupAndWait() {
+            cleanup()
+            // Wait for all child processes to fully exit so they can release lock files
+            await Promise.all(
+              processes.map(
+                (proc) =>
+                  new Promise<void>((resolve) => {
+                    if (proc.exitCode !== null || proc.signalCode !== null) return resolve()
+                    proc.on('exit', () => resolve())
+                  })
+              )
+            )
+            if (activeLazySupervisor) {
+              try {
+                await activeLazySupervisor.close()
+              } catch {
+                // Supervisor close errors should not block dev runtime cleanup.
+              }
+              activeLazySupervisor = null
+            }
+            if (activeLazySchedulerSupervisor) {
+              try {
+                await activeLazySchedulerSupervisor.close()
+              } catch {
+                // Scheduler supervisor close errors should not block dev runtime cleanup.
+              }
+              activeLazySchedulerSupervisor = null
+            }
+            // Safety net: remove Next.js dev lock file in case the child didn't clean up
+            const lockFile = path.join(appDir, '.mercato', 'next', 'dev', 'lock')
+            try {
+              fs.unlinkSync(lockFile)
+            } catch {
+              // Lock file may already be removed by Next.js — ignore
+            }
+            processes = []
+          }
+
+          process.on('SIGTERM', () => {
+            stopping = true
+            cleanup()
+          })
+          process.on('SIGINT', () => {
+            stopping = true
+            cleanup()
+          })
 
           console.log('[server] Starting Open Mercato in dev mode...')
 
@@ -1261,57 +1731,157 @@ export async function run(argv = process.argv) {
           const nextBin = resolveInstalledBinary(nodeModulesBases, 'next/dist/bin/next')
           const mercatoBin = resolveInstalledBinary(nodeModulesBases, '@open-mercato/cli/bin/mercato')
 
-          // Start Next.js dev
-          const nextProcess = spawn('node', [nextBin, 'dev', '--turbopack'], {
-            stdio: 'inherit',
-            env: process.env,
-            cwd: appDir,
+          const stopEnvWatcher = watchDevEnvFiles(appDir, (filePath) => {
+            envChangePromiseResolve?.({
+              label: 'Environment file change',
+              restart: true,
+              filePath,
+            })
           })
-          processes.push(nextProcess)
 
-          // Start workers if enabled
-          if (autoSpawnWorkers) {
-            console.log('[server] Starting workers for all queues...')
-            const workerProcess = spawn('node', [mercatoBin, 'queue', 'worker', '--all'], {
-              stdio: 'inherit',
-              env: process.env,
-              cwd: appDir,
+          const waitForEnvChange = (): Promise<DevServerRestartResult> =>
+            new Promise((resolve) => {
+              envChangePromiseResolve = resolve
             })
-            processes.push(workerProcess)
-          }
 
-          if (autoSpawnScheduler && queueStrategy === 'local') {
-            console.log('[server] Starting scheduler polling engine...')
-            const schedulerProcess = spawn('node', [mercatoBin, 'scheduler', 'start'], {
-              stdio: 'inherit',
-              env: process.env,
-              cwd: appDir,
-            })
-            processes.push(schedulerProcess)
-          }
+          const startNextDev = (runtimeEnv: NodeJS.ProcessEnv): Promise<ManagedProcessExitResult> =>
+            new Promise((resolve) => {
+              const nextProcess = spawn('node', [nextBin, 'dev', '--turbopack'], {
+                stdio: ['inherit', 'pipe', 'pipe'],
+                env: runtimeEnv,
+                cwd: appDir,
+              })
+              processes.push(nextProcess)
 
-          // Start POI NATS consumer if enabled (when POI_NATS_URL is set)
-          if (process.env.POI_NATS_URL) {
-            console.log('[server] Starting POI NATS consumer...')
-            const poiProcess = spawn('node', [mercatoBin, 'shipment_tracking', 'poi:worker'], {
-              stdio: 'inherit',
-              env: process.env,
-              cwd: appDir,
-            })
-            processes.push(poiProcess)
-          }
+              let combinedOutput = ''
+              const appendOutput = (chunk: string) => {
+                combinedOutput += chunk
+                if (combinedOutput.length > 32_768) {
+                  combinedOutput = combinedOutput.slice(-32_768)
+                }
+              }
 
-          // Wait for any process to exit
-          await Promise.race(
-            processes.map(
-              (proc) =>
-                new Promise<void>((resolve) => {
-                  proc.on('exit', () => resolve())
+              nextProcess.stdout?.on('data', (chunk: Buffer | string) => {
+                const text = typeof chunk === 'string' ? chunk : chunk.toString()
+                process.stdout.write(text)
+                appendOutput(text)
+              })
+              nextProcess.stderr?.on('data', (chunk: Buffer | string) => {
+                const text = typeof chunk === 'string' ? chunk : chunk.toString()
+                process.stderr.write(text)
+                appendOutput(text)
+              })
+
+              nextProcess.on('exit', async (code, signal) => {
+                if (!didRetryCorruptedTurbopackCache && isTurbopackCacheCorruption(combinedOutput)) {
+                  didRetryCorruptedTurbopackCache = true
+                  console.log('[server] Detected corrupted Turbopack dev cache. Clearing .mercato/next/dev and restarting Next.js once...')
+                  removeTurbopackDevCache(appDir)
+                  return resolve(await startNextDev(runtimeEnv))
+                }
+                resolve({
+                  label: 'Next.js dev server',
+                  code,
+                  signal,
                 })
-            )
-          )
+              })
+            })
 
-          cleanup()
+          try {
+            while (!stopping) {
+              envReloader.reload()
+              const runtimeEnv = buildServerProcessEnvironment(process.env)
+              const autoSpawnWorkersMode = resolveAutoSpawnWorkersMode(process.env)
+              const autoSpawnSchedulerMode = resolveAutoSpawnSchedulerMode(process.env)
+              const queueStrategy = process.env.QUEUE_STRATEGY || 'local'
+              const schedulerCommand = lookupModuleCommand(getCliModules(), 'scheduler', 'start')
+              const managedExitPromises: Promise<DevServerExitResult>[] = [
+                startNextDev(runtimeEnv),
+                waitForEnvChange(),
+              ]
+
+              // Start workers if enabled
+              if (autoSpawnWorkersMode !== 'off') {
+                const discoveredWorkers = getRegisteredCliWorkers()
+                const discoveredWorkerQueues = [...new Set(discoveredWorkers.map((worker) => worker.queue))]
+                if (discoveredWorkerQueues.length === 0) {
+                  console.error('[server] AUTO_SPAWN_WORKERS is enabled, but no queues were discovered from CLI modules. Run `yarn generate` and verify `.mercato/generated/modules.cli.generated.ts` contains worker entries. Continuing without auto-spawned workers.')
+                } else if (autoSpawnWorkersMode === 'lazy') {
+                  console.log(`[server] Lazy worker auto-spawn enabled — workers will start on first job (${discoveredWorkerQueues.length} queue(s) watched).`)
+                  activeLazySupervisor = startLazyWorkerSupervisor({
+                    mercatoBin,
+                    appDir,
+                    runtimeEnv,
+                    workers: discoveredWorkers,
+                    pollMs: resolveLazyPollMs(process.env),
+                    restartOnUnexpectedExit: resolveLazyRestart(process.env),
+                  })
+                } else {
+                  console.log('[server] Eager worker auto-spawn enabled - starting workers for all queues...')
+                  const workerProcess = spawn('node', [mercatoBin, 'queue', 'worker', '--all'], {
+                    stdio: 'inherit',
+                    env: runtimeEnv,
+                    cwd: appDir,
+                  })
+                  processes.push(workerProcess)
+                  managedExitPromises.push(waitForManagedProcessExit(workerProcess, formatQueueWorkerLabel(discoveredWorkerQueues)))
+                }
+              }
+
+              if (autoSpawnSchedulerMode !== 'off' && queueStrategy === 'local') {
+                if (schedulerCommand.status !== 'ok') {
+                  console.log(`[server] Skipping scheduler auto-start — ${describeMissingModuleCommand(schedulerCommand)}`)
+                } else if (autoSpawnSchedulerMode === 'lazy') {
+                  console.log('[server] Lazy scheduler auto-spawn enabled - scheduler will start when an enabled schedule exists.')
+                  activeLazySchedulerSupervisor = startLazySchedulerSupervisor({
+                    mercatoBin,
+                    appDir,
+                    runtimeEnv,
+                    pollMs: resolveLazySchedulerPollMs(process.env),
+                    restartOnUnexpectedExit: resolveLazySchedulerRestart(process.env),
+                  })
+                } else {
+                  console.log('[server] Eager scheduler auto-spawn enabled - starting scheduler polling engine...')
+                  const schedulerProcess = spawn('node', [mercatoBin, 'scheduler', 'start'], {
+                    stdio: 'inherit',
+                    env: runtimeEnv,
+                    cwd: appDir,
+                  })
+                  processes.push(schedulerProcess)
+                  managedExitPromises.push(waitForManagedProcessExit(schedulerProcess, 'Scheduler polling engine'))
+                }
+              }
+
+              // Start POI NATS consumer if enabled (when POI_NATS_URL is set)
+              if (process.env.POI_NATS_URL) {
+                console.log('[server] Starting POI NATS consumer...')
+                const poiProcess = spawn('node', [mercatoBin, 'shipment_tracking', 'poi:worker'], {
+                  stdio: 'inherit',
+                  env: runtimeEnv,
+                  cwd: appDir,
+                })
+                processes.push(poiProcess)
+                managedExitPromises.push(waitForManagedProcessExit(poiProcess, 'POI NATS consumer'))
+              }
+
+              const firstExit = await Promise.race(managedExitPromises)
+              await cleanupAndWait()
+              envChangePromiseResolve = null
+
+              if (isDevServerRestartResult(firstExit)) {
+                console.log(`[server] Detected environment file change (${path.basename(firstExit.filePath)}). Restarting app runtime...`)
+                continue
+              }
+
+              if (!isExpectedManagedExit(firstExit, { stopping })) {
+                throw createManagedProcessExitError(firstExit)
+              }
+
+              stopping = true
+            }
+          } finally {
+            stopEnvWatcher()
+          }
         },
       },
       {
@@ -1324,78 +1894,163 @@ export async function run(argv = process.argv) {
           const nodeModulesBases = Array.from(new Set([env.rootDir, appDir]))
 
           const processes: ChildProcess[] = []
-          const autoSpawnWorkers = process.env.AUTO_SPAWN_WORKERS !== 'false'
-          const autoSpawnScheduler = process.env.AUTO_SPAWN_SCHEDULER !== 'false'
+          const autoSpawnWorkersMode = resolveAutoSpawnWorkersMode(process.env)
+          const autoSpawnSchedulerMode = resolveAutoSpawnSchedulerMode(process.env)
           const queueStrategy = process.env.QUEUE_STRATEGY || 'local'
+          const runtimeEnv = buildServerProcessEnvironment(process.env)
+          const schedulerCommand = lookupModuleCommand(getCliModules(), 'scheduler', 'start')
+          const serverStartLock = acquireServerStartLock(appDir, {
+            port: runtimeEnv.PORT ?? process.env.PORT ?? null,
+          })
+          let activeLazySupervisor: ReturnType<typeof startLazyWorkerSupervisor> | null = null
+          let activeLazySchedulerSupervisor: ReturnType<typeof startLazySchedulerSupervisor> | null = null
+          let stopping = false
 
           function cleanup() {
             console.log('[server] Shutting down...')
             for (const proc of processes) {
-              if (!proc.killed) {
+              if (!proc.killed && proc.exitCode === null && proc.signalCode === null) {
                 proc.kill('SIGTERM')
               }
             }
+            if (activeLazySupervisor) {
+              void activeLazySupervisor.close().catch(() => undefined)
+            }
+            if (activeLazySchedulerSupervisor) {
+              void activeLazySchedulerSupervisor.close().catch(() => undefined)
+            }
           }
 
-          process.on('SIGTERM', cleanup)
-          process.on('SIGINT', cleanup)
+          async function cleanupAndWait() {
+            cleanup()
+            await Promise.all(
+              processes.map(
+                (proc) =>
+                  new Promise<void>((resolve) => {
+                    if (proc.exitCode !== null || proc.signalCode !== null) return resolve()
+                    proc.on('exit', () => resolve())
+                  })
+              )
+            )
+            if (activeLazySupervisor) {
+              try {
+                await activeLazySupervisor.close()
+              } catch {
+                // Supervisor close errors should not block server shutdown.
+              }
+              activeLazySupervisor = null
+            }
+            if (activeLazySchedulerSupervisor) {
+              try {
+                await activeLazySchedulerSupervisor.close()
+              } catch {
+                // Scheduler supervisor close errors should not block server shutdown.
+              }
+              activeLazySchedulerSupervisor = null
+            }
+          }
+
+          process.on('SIGTERM', () => {
+            stopping = true
+            cleanup()
+          })
+          process.on('SIGINT', () => {
+            stopping = true
+            cleanup()
+          })
 
           console.log('[server] Starting Open Mercato in production mode...')
 
           const nextBin = resolveInstalledBinary(nodeModulesBases, 'next/dist/bin/next')
           const mercatoBin = resolveInstalledBinary(nodeModulesBases, '@open-mercato/cli/bin/mercato')
+          ensureNextBuildIdInConfiguredDistDir(appDir)
 
-          // Start Next.js production server
-          const nextProcess = spawn('node', [nextBin, 'start'], {
-            stdio: 'inherit',
-            env: process.env,
-            cwd: appDir,
-          })
-          processes.push(nextProcess)
-
-          // Start workers if enabled
-          if (autoSpawnWorkers) {
-            console.log('[server] Starting workers for all queues...')
-            const workerProcess = spawn('node', [mercatoBin, 'queue', 'worker', '--all'], {
+          try {
+            // Start Next.js production server
+            const nextProcess = spawn('node', [nextBin, 'start'], {
               stdio: 'inherit',
-              env: process.env,
+              env: runtimeEnv,
               cwd: appDir,
             })
-            processes.push(workerProcess)
-          }
+            processes.push(nextProcess)
+            const managedExitPromises: Promise<ManagedProcessExitResult>[] = [
+              waitForManagedProcessExit(nextProcess, 'Next.js production server'),
+            ]
 
-          if (autoSpawnScheduler && queueStrategy === 'local') {
-            console.log('[server] Starting scheduler polling engine...')
-            const schedulerProcess = spawn('node', [mercatoBin, 'scheduler', 'start'], {
-              stdio: 'inherit',
-              env: process.env,
-              cwd: appDir,
-            })
-            processes.push(schedulerProcess)
-          }
-
-          // Start POI NATS consumer if enabled (when POI_NATS_URL is set)
-          if (process.env.POI_NATS_URL) {
-            console.log('[server] Starting POI NATS consumer...')
-            const poiProcess = spawn('node', [mercatoBin, 'shipment_tracking', 'poi:worker'], {
-              stdio: 'inherit',
-              env: process.env,
-              cwd: appDir,
-            })
-            processes.push(poiProcess)
-          }
-
-          // Wait for any process to exit
-          await Promise.race(
-            processes.map(
-              (proc) =>
-                new Promise<void>((resolve) => {
-                  proc.on('exit', () => resolve())
+            // Start workers if enabled
+            if (autoSpawnWorkersMode !== 'off') {
+              const discoveredWorkers = getRegisteredCliWorkers()
+              const discoveredWorkerQueues = [...new Set(discoveredWorkers.map((worker) => worker.queue))]
+              if (discoveredWorkerQueues.length === 0) {
+                console.error('[server] AUTO_SPAWN_WORKERS is enabled, but no queues were discovered from CLI modules. Run `yarn generate` and verify `.mercato/generated/modules.cli.generated.ts` contains worker entries. Continuing without auto-spawned workers.')
+              } else if (autoSpawnWorkersMode === 'lazy') {
+                console.log(`[server] Lazy worker auto-spawn enabled — workers will start on first job (${discoveredWorkerQueues.length} queue(s) watched).`)
+                activeLazySupervisor = startLazyWorkerSupervisor({
+                  mercatoBin,
+                  appDir,
+                  runtimeEnv,
+                  workers: discoveredWorkers,
+                  pollMs: resolveLazyPollMs(process.env),
+                  restartOnUnexpectedExit: resolveLazyRestart(process.env),
                 })
-            )
-          )
+              } else {
+                console.log('[server] Eager worker auto-spawn enabled - starting workers for all queues...')
+                const workerProcess = spawn('node', [mercatoBin, 'queue', 'worker', '--all'], {
+                  stdio: 'inherit',
+                  env: runtimeEnv,
+                  cwd: appDir,
+                })
+                processes.push(workerProcess)
+                managedExitPromises.push(waitForManagedProcessExit(workerProcess, formatQueueWorkerLabel(discoveredWorkerQueues)))
+              }
+            }
 
-          cleanup()
+            if (autoSpawnSchedulerMode !== 'off' && queueStrategy === 'local') {
+              if (schedulerCommand.status !== 'ok') {
+                console.log(`[server] Skipping scheduler auto-start — ${describeMissingModuleCommand(schedulerCommand)}`)
+              } else if (autoSpawnSchedulerMode === 'lazy') {
+                console.log('[server] Lazy scheduler auto-spawn enabled - scheduler will start when an enabled schedule exists.')
+                activeLazySchedulerSupervisor = startLazySchedulerSupervisor({
+                  mercatoBin,
+                  appDir,
+                  runtimeEnv,
+                  pollMs: resolveLazySchedulerPollMs(process.env),
+                  restartOnUnexpectedExit: resolveLazySchedulerRestart(process.env),
+                })
+              } else {
+                console.log('[server] Eager scheduler auto-spawn enabled - starting scheduler polling engine...')
+                const schedulerProcess = spawn('node', [mercatoBin, 'scheduler', 'start'], {
+                  stdio: 'inherit',
+                  env: runtimeEnv,
+                  cwd: appDir,
+                })
+                processes.push(schedulerProcess)
+                managedExitPromises.push(waitForManagedProcessExit(schedulerProcess, 'Scheduler polling engine'))
+              }
+            }
+
+            // Start POI NATS consumer if enabled (when POI_NATS_URL is set)
+            if (process.env.POI_NATS_URL) {
+              console.log('[server] Starting POI NATS consumer...')
+              const poiProcess = spawn('node', [mercatoBin, 'shipment_tracking', 'poi:worker'], {
+                stdio: 'inherit',
+                env: runtimeEnv,
+                cwd: appDir,
+              })
+              processes.push(poiProcess)
+              managedExitPromises.push(waitForManagedProcessExit(poiProcess, 'POI NATS consumer'))
+            }
+
+            const firstExit = await Promise.race(managedExitPromises)
+
+            await cleanupAndWait()
+
+            if (!isExpectedManagedExit(firstExit, { stopping })) {
+              throw createManagedProcessExitError(firstExit)
+            }
+          } finally {
+            serverStartLock.release()
+          }
         },
       },
     ],

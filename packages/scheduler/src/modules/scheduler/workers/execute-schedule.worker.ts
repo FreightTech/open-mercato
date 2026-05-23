@@ -1,6 +1,6 @@
 import type { QueuedJob, JobContext, WorkerMeta } from '@open-mercato/queue'
 import { createQueue } from '@open-mercato/queue'
-import { getRedisUrl } from '@open-mercato/shared/lib/redis/connection'
+import { getRedisUrlOrThrow } from '@open-mercato/shared/lib/redis/connection'
 import type { EntityManager } from '@mikro-orm/core'
 import { ScheduledJob } from '../data/entities.js'
 import { CommandBus } from '@open-mercato/shared/lib/commands'
@@ -181,7 +181,7 @@ async function runQueueTarget(
 ): Promise<void> {
   const queueStrategy = (process.env.QUEUE_STRATEGY || 'local') as 'local' | 'async'
   const targetQueue = createQueue(schedule.targetQueue!, queueStrategy, {
-    connection: { url: getRedisUrl('QUEUE') },
+    connection: { url: getRedisUrlOrThrow('QUEUE') },
   })
 
   let targetJobId: string | undefined

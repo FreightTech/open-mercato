@@ -252,7 +252,7 @@ export default async function handle(
         gateInCutoff: bookingData.gateCloseDate || null,
       })
 
-      await em.persistAndFlush(leg)
+      await em.persist(leg).flush()
       created = true
 
       logger.info('leg_created_from_booking', {

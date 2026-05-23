@@ -50,33 +50,33 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit
 
   const em = container.resolve('em') as EntityManager
-  const knex = (em.getConnection() as unknown as { getKnex(): import('knex').Knex }).getKnex()
+  const db = em.getKysely<any>()
 
   // Get team's contractor assignments
-  const baseQuery = knex('fms_team_contractor_assignments as tca')
-    .join('contractors as c', function () {
-      this.on('c.id', '=', 'tca.contractor_id').andOnNull('c.deleted_at')
-    })
-    .where('tca.organization_id', organizationId)
-    .where('tca.team_id', query.teamId)
-    .whereNull('tca.deleted_at')
+  const baseQuery = () => db.selectFrom('fms_team_contractor_assignments as tca')
+    .innerJoin('contractors as c', (join) =>
+      join.onRef('c.id', '=', 'tca.contractor_id').on('c.deleted_at', 'is', null)
+    )
+    .where('tca.organization_id', '=', organizationId)
+    .where('tca.team_id', '=', query.teamId)
+    .where('tca.deleted_at', 'is', null)
 
   // Get total count
-  const countResult = await baseQuery.clone().count('* as count').first()
+  const countResult = await baseQuery().select(({ fn }) => fn.countAll().as('count')).executeTakeFirst()
   const total = Number(countResult?.count ?? 0)
 
   // Get assignments with contractor details
-  const rows = await baseQuery
-    .clone()
-    .select(
+  const rows = await baseQuery()
+    .select([
       'tca.id',
       'tca.contractor_id as contractorId',
       'c.name as contractorName',
-      'tca.created_at as createdAt'
-    )
+      'tca.created_at as createdAt',
+    ])
     .orderBy('c.name', 'asc')
     .limit(limit)
     .offset(offset)
+    .execute()
 
   const items = rows.map((row) => ({
     id: row.id,

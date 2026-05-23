@@ -180,7 +180,7 @@ export default async function handle(
       updatedAt: now,
     })
 
-    await em.persistAndFlush(invoice)
+    await em.persist(invoice).flush()
 
     logger.info('invoice_created_from_document', {
       documentId,

@@ -5,7 +5,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { resolveTranslations, detectLocale } from '@open-mercato/shared/lib/i18n/server'
-import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { CrudHttpError, isCrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import {
   bridgeLegacyGuard,
@@ -17,6 +17,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import crypto from 'node:crypto'
 import { withScopedPayload } from '../../utils'
 import { hashAuthToken } from '../../../../auth/lib/tokenHash'
+import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { SalesQuote } from '../../../data/entities'
 import { quoteSendSchema } from '../../../data/validators'
 import { sendEmail } from '@open-mercato/shared/lib/email/send'
@@ -144,7 +145,8 @@ export async function POST(req: Request) {
     }
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
-    const quote = await em.findOne(SalesQuote, { id: input.quoteId, deletedAt: null })
+    const tenantScope = ctx.auth?.tenantId ? { tenantId: ctx.auth.tenantId } : undefined
+    const quote = await findOneWithDecryption(em, SalesQuote, { id: input.quoteId, deletedAt: null }, {}, tenantScope)
     if (!quote) {
       throw new CrudHttpError(404, { error: translate('sales.documents.detail.error', 'Document not found or inaccessible.') })
     }
@@ -177,7 +179,6 @@ export async function POST(req: Request) {
     })
     quote.updatedAt = now
     em.persist(quote)
-    await em.flush()
 
     const appUrl = process.env.APP_URL || ''
     const url = appUrl ? `${appUrl.replace(/\/$/, '')}/quote/${rawAcceptanceToken}` : `/quote/${rawAcceptanceToken}`
@@ -207,6 +208,8 @@ export async function POST(req: Request) {
       react: QuoteSentEmail({ url, copy }),
     })
 
+    await em.flush()
+
     if (guardResult.afterSuccessCallbacks.length) {
       await runGuardAfterSuccessCallbacks(guardResult.afterSuccessCallbacks, {
         tenantId: ctx.auth?.tenantId ?? '',
@@ -222,7 +225,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true })
   } catch (err) {
-    if (err instanceof CrudHttpError) {
+    if (isCrudHttpError(err)) {
       return NextResponse.json(err.body, { status: err.status })
     }
     const { translate } = await resolveTranslations()

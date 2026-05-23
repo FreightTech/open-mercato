@@ -124,7 +124,7 @@ const deleteAddressCommand: CommandHandler<{ id: string }, { addressId: string }
 
     const tenantId = address.tenantId
     const organizationId = address.organizationId
-    await em.removeAndFlush(address)
+    await em.remove(address).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

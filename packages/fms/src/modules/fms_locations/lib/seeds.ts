@@ -171,6 +171,6 @@ export async function seedAirport(
     createdBy,
   })
 
-  await em.persistAndFlush(location)
+  await em.persist(location).flush()
   return location.id
 }

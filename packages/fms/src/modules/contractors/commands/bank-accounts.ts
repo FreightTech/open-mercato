@@ -176,7 +176,7 @@ const deleteBankAccountCommand: CommandHandler<{ id: string }, { bankAccountId: 
 
     const tenantId = bankAccount.tenantId
     const organizationId = bankAccount.organizationId
-    await em.removeAndFlush(bankAccount)
+    await em.remove(bankAccount).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

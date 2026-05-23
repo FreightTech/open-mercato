@@ -147,7 +147,7 @@ const createRfqCommand: CommandHandler<FmsRfqCreateInput, { rfqId: string }> = {
       updatedAt: now,
     })
 
-    await em.persistAndFlush(rfq)
+    await em.persist(rfq).flush()
 
     // Create RFQ items if provided (from LLM extraction)
     const items = (input as any).items as Array<Record<string, unknown>> | undefined

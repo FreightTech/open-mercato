@@ -190,7 +190,7 @@ const createAirUnitCommand: CommandHandler<FmsAirUnitCreateInput & { projectId: 
       updatedAt: now,
     })
 
-    await em.persistAndFlush(unit)
+    await em.persist(unit).flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({

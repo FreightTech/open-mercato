@@ -1,15 +1,5 @@
-import {
-  Entity,
-  PrimaryKey,
-  Property,
-  Index,
-  Unique,
-  OneToOne,
-  OneToMany,
-  ManyToOne,
-  Collection,
-  OptionalProps,
-} from '@mikro-orm/core'
+import { Collection, OptionalProps } from '@mikro-orm/core'
+import { Entity, PrimaryKey, Property, Index, Unique, OneToOne, OneToMany, ManyToOne } from '@mikro-orm/decorators/legacy'
 
 export type ContractorAddressPurpose = 'office' | 'warehouse' | 'billing' | 'shipping' | 'other'
 export type ContractorRoleCategory = 'trading' | 'carrier' | 'intermediary' | 'facility'
